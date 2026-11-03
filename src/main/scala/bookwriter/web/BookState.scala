@@ -1,0 +1,167 @@
+package bookwriter.web
+
+import bookwriter.{BookOutline, ChapterPlan, Config, WrittenChapter}
+
+enum RunMode:
+  case StepByStep, RunAll
+
+  def label: String = this match
+    case RunMode.StepByStep => "step"
+    case RunMode.RunAll     => "all"
+
+object RunMode:
+  def parse(raw: String): Option[RunMode] = raw.trim.toLowerCase match
+    case "all"  => Some(RunMode.RunAll)
+    case "step" => Some(RunMode.StepByStep)
+    case _      => None
+
+sealed trait Gate
+object Gate:
+  final case class TocApprove(mode: RunMode, comment: Option[String], edits: Option[OutlineEdits]) extends Gate
+  final case class TocRevise(comment: String) extends Gate
+  final case class ChapterApprove(comment: Option[String]) extends Gate
+  final case class ChapterApproveRest(comment: Option[String]) extends Gate
+  final case class ChapterRevise(comment: String) extends Gate
+
+sealed trait BookPhase:
+  def status: String
+
+object BookPhase:
+  case object Planning                                              extends BookPhase { val status = "planning" }
+  final case class TocReview(outline: BookOutline, revision: Int)   extends BookPhase { val status = "toc_review" }
+  final case class Generating(
+    outline: BookOutline,
+    written: List[WrittenChapter],
+    current: ChapterPlan,
+    remaining: List[ChapterPlan],
+    mode: RunMode,
+    notes: List[String]
+  )                                                                 extends BookPhase { val status = "generating" }
+  final case class ChapterReview(
+    outline: BookOutline,
+    written: List[WrittenChapter],
+    pending: WrittenChapter,
+    remaining: List[ChapterPlan],
+    notes: List[String]
+  )                                                                 extends BookPhase { val status = "chapter_review" }
+  final case class Editing(outline: BookOutline, written: List[WrittenChapter])
+                                                                    extends BookPhase { val status = "editing" }
+  final case class Completed(
+    outline: BookOutline,
+    written: List[WrittenChapter],
+    markdown: String,
+    files: List[String],
+    elapsedSeconds: Long
+  )                                                                 extends BookPhase { val status = "completed" }
+  final case class Failed(message: String, interrupted: String)     extends BookPhase { val status = "failed" }
+
+object BookMapper {
+
+  def outlineDto(outline: BookOutline): OutlineDto = OutlineDto(
+    title = outline.title,
+    genre = outline.genre,
+    premise = outline.premise,
+    chapters = outline.chapters.map(c => ChapterPlanDto(c.number, c.title, c.synopsis))
+  )
+
+  def chapterStatus(outline: BookOutline, phase: BookPhase): List[ChapterStatusDto] = {
+    def stateOf(n: Int): Option[ChapterStatusDto] = phase match {
+      case BookPhase.Completed(_, written, _, _, _) => done(n, written)
+      case BookPhase.Editing(_, written)            => done(n, written)
+      case BookPhase.ChapterReview(_, written, pending, _, _) =>
+        if pending.plan.number == n then Some(review(pending))
+        else done(n, written)
+      case BookPhase.Generating(_, written, current, _, _, _) =>
+        if current.number == n then Some(ChapterStatusDto(n, "", "", "writing"))
+        else done(n, written)
+      case _ => None
+    }
+    def done(n: Int, written: List[WrittenChapter]): Option[ChapterStatusDto] =
+      written.find(_.plan.number == n).map(wc => ChapterStatusDto(n, "", "", "written", Some(wc.wordCount)))
+    def review(wc: WrittenChapter): ChapterStatusDto =
+      ChapterStatusDto(wc.plan.number, "", "", "awaiting_review", Some(wc.wordCount))
+
+    outline.chapters.map { plan =>
+      stateOf(plan.number).getOrElse(ChapterStatusDto(plan.number, "", "", "pending"))
+        .copy(title = plan.title, synopsis = plan.synopsis)
+    }
+  }
+
+  def bookDto(id: String, cfg: Config, phase: BookPhase, events: List[EventDto]): BookDto = {
+    val outline = outlineOf(phase)
+    val written = writtenOf(phase)
+    val chapters = outline.toList.flatMap(o => chapterStatus(o, phase))
+    BookDto(
+      id = id,
+      prompt = cfg.prompt,
+      model = cfg.model,
+      status = phase.status,
+      writtenCount = written.size,
+      totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters),
+      outline = outline.map(outlineDto),
+      chapters = chapters,
+      currentChapter = currentOf(phase),
+      mode = modeOf(phase),
+      error = phase match { case BookPhase.Failed(m, _) => Some(m); case _ => None },
+      markdownFiles = phase match { case BookPhase.Completed(_, _, _, files, _) => files; case _ => Nil },
+      markdown = phase match { case BookPhase.Completed(_, _, md, _, _) => Some(md); case _ => None },
+      events = events,
+      elapsedSeconds = phase match { case BookPhase.Completed(_, _, _, _, s) => Some(s); case _ => None }
+    )
+  }
+
+  def listItem(id: String, cfg: Config, phase: BookPhase): BookListItemDto = {
+    val outline = outlineOf(phase)
+    val written = writtenOf(phase)
+    BookListItemDto(
+      id = id,
+      prompt = cfg.prompt,
+      status = phase.status,
+      title = outline.map(_.title),
+      writtenCount = written.size,
+      totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters)
+    )
+  }
+
+  def chapterText(phase: BookPhase, n: Int): Option[ChapterTextDto] = phase match {
+    case BookPhase.Completed(_, written, _, _, _)       => fromWritten(written, n)
+    case BookPhase.Editing(_, written)                  => fromWritten(written, n)
+    case BookPhase.ChapterReview(_, written, pending, _, _) =>
+      if pending.plan.number == n then Some(ChapterTextDto(n, pending.plan.title, pending.text))
+      else fromWritten(written, n)
+    case BookPhase.Generating(_, written, _, _, _, _)   => fromWritten(written, n)
+    case _                                              => None
+  }
+
+  private def fromWritten(written: List[WrittenChapter], n: Int): Option[ChapterTextDto] =
+    written.find(_.plan.number == n).map(wc => ChapterTextDto(n, wc.plan.title, wc.text))
+
+  private def outlineOf(phase: BookPhase): Option[BookOutline] = phase match {
+    case BookPhase.Planning                        => None
+    case BookPhase.TocReview(o, _)                 => Some(o)
+    case BookPhase.Generating(o, _, _, _, _, _)    => Some(o)
+    case BookPhase.ChapterReview(o, _, _, _, _)    => Some(o)
+    case BookPhase.Editing(o, _)                   => Some(o)
+    case BookPhase.Completed(o, _, _, _, _)        => Some(o)
+    case BookPhase.Failed(_, _)                    => None
+  }
+
+  private def writtenOf(phase: BookPhase): List[WrittenChapter] = phase match {
+    case BookPhase.Generating(_, written, _, _, _, _) => written
+    case BookPhase.ChapterReview(_, written, _, _, _) => written
+    case BookPhase.Editing(_, written)                => written
+    case BookPhase.Completed(_, written, _, _, _)     => written
+    case _                                            => Nil
+  }
+
+  private def currentOf(phase: BookPhase): Option[Int] = phase match {
+    case BookPhase.Generating(_, _, current, _, _, _) => Some(current.number)
+    case BookPhase.ChapterReview(_, _, pending, _, _) => Some(pending.plan.number)
+    case _                                            => None
+  }
+
+  private def modeOf(phase: BookPhase): Option[String] = phase match {
+    case BookPhase.Generating(_, _, _, _, mode, _) => Some(mode.label)
+    case _                                         => None
+  }
+}

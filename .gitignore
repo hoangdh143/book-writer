@@ -1,0 +1,12 @@
+target/
+output/
+.idea/
+*.iml
+.vscode/
+.bsp/
+.bloop/
+.metals/
+.metals.sqlite*
+
+ui/node_modules/
+ui/dist/
