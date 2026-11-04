@@ -57,7 +57,6 @@ export const CreateBookFields = ({ values, errors, onPatch, apiKeyHint }: Props)
         <input
           type="number"
           min={200}
-          max={5000}
           className={input}
           value={values.wordsPerChapter}
           onChange={(event) => onPatch({ wordsPerChapter: event.target.value })}

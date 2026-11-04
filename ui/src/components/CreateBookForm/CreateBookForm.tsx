@@ -15,7 +15,7 @@ const formSchema = z
   .object({
     prompt: z.string().trim().min(1, 'Describe your book idea'),
     chapters: z.coerce.number().int().min(1, '1..30').max(30, '1..30'),
-    wordsPerChapter: z.coerce.number().int().min(200, '200..5000').max(5000, '200..5000'),
+    wordsPerChapter: z.coerce.number().int().min(200, 'At least 200 words'),
     modelId: z.string().min(1),
     customModel: z.string(),
     customBaseUrl: z.string(),

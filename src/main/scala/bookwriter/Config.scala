@@ -20,6 +20,13 @@ final case class Config(
 
 object Config {
 
+  /** Target words per LLM call when writing a chapter; longer chapters are split
+    * into consecutive segments chained with continuity, so chapter length is unlimited. */
+  val wordsPerSegment: Int = 2000
+
+  def segmentCount(wordsPerChapter: Int): Int =
+    math.max(1, math.ceil(wordsPerChapter.toDouble / wordsPerSegment).toInt)
+
   private val defaultBaseUrl = "https://api.deepseek.com/chat/completions"
 
   private val localPrefixes = List(
@@ -50,7 +57,8 @@ object Config {
       |  --prompt <text>       The book topic / idea / premise. Or pass it as the only positional argument.
       |                        Falls back to env BOOK_PROMPT.
       |  --chapters <n>        Target number of chapters (default 6)
-      |  --words <n>           Target words per chapter (default 1500)
+      |  --words <n>           Target words per chapter (default 1500; no upper limit — long
+      |                        chapters are written in consecutive segments)
       |  --out <path>          Output markdown file (default output/book.md)
       |  --concurrency <n>     1 = chapters written sequentially with continuity (default);
       |                        >1 = chapters written in parallel via loki BatchExecutor
@@ -80,7 +88,7 @@ object Config {
       if (v < min || v > max) Left(s"$name must be in $min..$max (got $v)") else Right(())
     for {
       _ <- inRange("chapters", chapters, 1, 30)
-      _ <- inRange("wordsPerChapter", words, 200, 5000)
+      _ <- if (words < 200) Left(s"wordsPerChapter must be at least 200 (got $words)") else Right(())
       _ <- inRange("concurrency", concurrency, 1, 10)
       _ <- if (temperature < 0.0 || temperature > 2.0) Left("temperature must be in 0.0..2.0") else Right(())
       _ <- if (req.prompt.trim.isEmpty) Left("prompt must not be empty") else Right(())
@@ -123,8 +131,8 @@ object Config {
         case _ => Left(s"--chapters must be an integer in 1..30 (got '$v')")
       }
       case "--words" :: v :: t       => intOf(v) match {
-        case Some(n) if n >= 200 && n <= 5000 => loop(t, cfg.copy(wordsPerChapter = n), positional)
-        case _ => Left(s"--words must be an integer in 200..5000 (got '$v')")
+        case Some(n) if n >= 200 => loop(t, cfg.copy(wordsPerChapter = n), positional)
+        case _ => Left(s"--words must be an integer of at least 200 (got '$v')")
       }
       case "--out" :: v :: t         => loop(t, cfg.copy(out = Paths.get(v)), positional)
       case "--concurrency" :: v :: t => intOf(v) match {

@@ -50,22 +50,33 @@ object Stages {
     notes: List[String] = Nil,
     revision: Option[String] = None
   ): ZIO[Any, Throwable, ChapterDraft] = {
-    val brief = Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision)
+    val plan = outline.chapters(idx)
+    val totalParts = Config.segmentCount(cfg.wordsPerChapter)
 
-    def once(): ZIO[Any, Throwable, ChapterDraft] =
+    def attempt(brief: String): ZIO[Any, Throwable, ChapterDraft] =
       app.run(writer.nodeId, brief).flatMap { ctx =>
         val text = ctx.outputs.get(writer.nodeId).map(responseText).getOrElse("")
         if (text.trim.isEmpty) ZIO.fail(new RuntimeException("empty chapter text"))
         else ZIO.succeed(ChapterDraft(text, ctx))
       }
 
-    def withRetries(left: Int): ZIO[Any, Throwable, ChapterDraft] =
-      once().catchAll { e =>
-        if (left > 0) withRetries(left - 1)
-        else ZIO.fail(new RuntimeException(s"Chapter ${outline.chapters(idx).number} '${outline.chapters(idx).title}' failed: ${e.getMessage}", e))
+    def withRetries(brief: String, left: Int): ZIO[Any, Throwable, ChapterDraft] =
+      attempt(brief).catchAll { e =>
+        if (left > 0) withRetries(brief, left - 1)
+        else ZIO.fail(new RuntimeException(s"Chapter ${plan.number} '${plan.title}' failed: ${e.getMessage}", e))
       }
 
-    withRetries(2)
+    if (totalParts <= 1)
+      withRetries(Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision), 2)
+    else
+      withRetries(
+        Briefs.chapterOpening(outline, idx, prevEnding, cfg, notes, revision, totalParts), 2
+      ).flatMap { opening =>
+        ZIO.foldLeft((2 to totalParts).toList)(opening) { (draft, part) =>
+          val brief = Briefs.chapterContinuation(outline, idx, draft.text, part, totalParts, cfg, notes)
+          withRetries(brief, 2).map(next => ChapterDraft(s"${draft.text}\n\n${next.text}", next.context))
+        }
+      }
   }
 
   def edit(

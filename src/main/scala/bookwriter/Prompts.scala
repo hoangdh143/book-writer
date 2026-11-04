@@ -33,7 +33,8 @@ Rules:
 - Output ONLY the finished chapter text in markdown. No preamble, no meta commentary ("Here is the
   chapter..."), no restating the assignment, and no heading like "Chapter N - Title" (the book assembler
   adds chapter headings).
-- Target length: about ${cfg.wordsPerChapter} words.
+- Target length: about ${cfg.wordsPerChapter} words for the chapter overall; your current
+  assignment tells you exactly how much to write in this call.
 - Fiction: vivid concrete detail, real dialogue, show don't tell, characters with consistent voices.
 - Non-fiction: clear structure with occasional ### subheadings, concrete examples, actionable insight.
 - Continuity: keep names, places, terminology and facts consistent with the plan; if an ending passage of

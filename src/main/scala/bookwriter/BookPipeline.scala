@@ -4,8 +4,8 @@ import zio.{UIO, ZIO}
 import java.time.Duration
 import loki.engine.app.GraphApp
 import loki.engine.core.store.GraphStore
-import loki.engine.core.nodes.{AgentNode, BatchStatus, EventType}
-import loki.engine.core.executor.{BatchExecutor, BatchItemResult, BatchRun, ExecutionContext, TraceEvent}
+import loki.engine.core.nodes.{AgentNode, EventType}
+import loki.engine.core.executor.{ExecutionContext, TraceEvent}
 
 object BookPipeline {
 
@@ -24,7 +24,7 @@ object BookPipeline {
       _       <- banner("Stage 2/4 - Writing chapters (ChapterWriter)")
       chapters <-
         if (cfg.concurrency <= 1) writeSequential(app, writer, cfg, outline)
-        else writeParallel(store, app, writer, cfg, outline)
+        else writeParallel(app, writer, cfg, outline)
       (foreword, blurb) <-
         if (cfg.skipEditor) ZIO.succeed(("", ""))
         else for {
@@ -101,43 +101,21 @@ object BookPipeline {
     }
   }
 
+  /** Chapters written concurrently with native ZIO parallelism; each chapter may itself
+    * consist of several consecutive segments, so chapter length is unlimited. */
   private def writeParallel(
-    store: GraphStore,
     app: GraphApp,
     writer: AgentNode,
     cfg: Config,
     outline: BookOutline
-  ): ZIO[Any, Throwable, List[WrittenChapter]] = {
-    val briefs = outline.chapters.indices.map(idx => Briefs.chapter(outline, idx, None, cfg)).toList
-    val batch = new BatchExecutor(store, app.getExecutor, concurrency = cfg.concurrency)
-    val queryFn = (item: Any) => item.asInstanceOf[String]
-
-    def collect(run: BatchRun): ZIO[Any, Throwable, List[WrittenChapter]] = {
-      val results = outline.chapters.zipWithIndex.map { case (plan, idx) =>
-        val r = run.results.getOrElse(
-          idx.toString,
-          BatchItemResult(itemId = idx.toString, status = BatchStatus.Failed, error = Some("no result"))
-        )
-        (plan, r)
+  ): ZIO[Any, Throwable, List[WrittenChapter]] =
+    ZIO
+      .foreachPar(outline.chapters) { plan =>
+        ZIO.succeed(println(s"  - Chapter ${plan.number}: ${plan.title}")) *>
+          Stages.writeChapter(app, writer, cfg, outline, plan.number - 1, None)
+            .map(draft => WrittenChapter(plan, draft.text))
       }
-      val failures = results.collect {
-        case (plan, r) if r.status != BatchStatus.Completed => (plan, r.error.getOrElse("unknown"))
-      }
-      if (failures.nonEmpty)
-        ZIO.fail(new RuntimeException(
-          "Chapter generation failed: " +
-          failures.map { case (p, e) => s"#${p.number} '${p.title}' ($e)" }.mkString("; ")
-        ))
-      else ZIO.succeed(results.map { case (plan, r) => WrittenChapter(plan, Stages.responseText(r.output)) })
-    }
-
-    batch.run(writer.nodeId, briefs, queryFn).flatMap { run =>
-      if (run.failed > 0) {
-        println(s"  ! ${run.failed} chapter(s) failed; retrying them once (completed chapters are kept)...")
-        batch.resume(run, briefs, queryFn)
-      } else ZIO.succeed(run)
-    }.flatMap(collect)
-  }
+      .withParallelism(cfg.concurrency)
 
   private def editStage(
     app: GraphApp,
