@@ -1,6 +1,6 @@
 import { marked } from 'marked'
 
-export type ExportFormat = 'markdown' | 'html' | 'text'
+export type ExportFormat = 'markdown' | 'html' | 'text' | 'epub'
 
 export interface ExportFormatOption {
   readonly id: ExportFormat
@@ -11,10 +11,11 @@ export const exportFormats: readonly ExportFormatOption[] = [
   { id: 'markdown', label: 'Markdown (.md)' },
   { id: 'html', label: 'HTML (.html)' },
   { id: 'text', label: 'Plain text (.txt)' },
+  { id: 'epub', label: 'EPUB (.epub)' },
 ]
 
 export interface ExportArtifact {
-  readonly content: string
+  readonly content: string | Uint8Array
   readonly filename: string
   readonly mime: string
 }
@@ -64,14 +65,14 @@ const buildText = (markdown: string, base: string): ExportArtifact => ({
   mime: 'text/plain',
 })
 
-const builders: Record<ExportFormat, (markdown: string, base: string) => ExportArtifact> = {
+const builders: Record<Exclude<ExportFormat, 'epub'>, (markdown: string, base: string) => ExportArtifact> = {
   markdown: buildMarkdown,
   html: buildHtml,
   text: buildText,
 }
 
-export const exportArtifact = (
+export const syncArtifact = (
   markdown: string,
-  format: ExportFormat,
+  format: Exclude<ExportFormat, 'epub'>,
   baseName: string,
 ): ExportArtifact => builders[format](markdown, baseName)

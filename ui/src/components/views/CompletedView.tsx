@@ -1,15 +1,30 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Book } from '../../api/types'
-import { exportArtifact, exportFormats } from '../../domain/export'
-import type { ExportFormat } from '../../domain/export'
+import { exportFormats, syncArtifact } from '../../domain/export'
+import type { ExportArtifact, ExportFormat } from '../../domain/export'
+import { buildEpub } from '../../domain/epubExport'
 import { safeBaseName } from '../../domain/text'
 import { button, input, prose } from '../../domain/uiClasses'
 import { useObjectUrl } from '../../hooks/useObjectUrl'
 
+const epubArtifact = async (markdown: string, baseName: string): Promise<ExportArtifact> => ({
+  content: await buildEpub(markdown, baseName),
+  filename: `${baseName}.epub`,
+  mime: 'application/epub+zip',
+})
+
 const ExportBar = ({ markdown, baseName }: { markdown: string; baseName: string }) => {
   const [format, setFormat] = useState<ExportFormat>('markdown')
-  const artifact = useMemo(() => exportArtifact(markdown, format, baseName), [markdown, format, baseName])
-  const href = useObjectUrl(artifact.content, artifact.mime)
+  const [loaded, setLoaded] = useState<ExportArtifact & { readonly format: ExportFormat }>()
+  useEffect(() => {
+    const load = async (): Promise<ExportArtifact & { readonly format: ExportFormat }> =>
+      format === 'epub'
+        ? { format, ...(await epubArtifact(markdown, baseName)) }
+        : { format, ...syncArtifact(markdown, format, baseName) }
+    void load().then(setLoaded).catch(() => setLoaded(undefined))
+  }, [markdown, format, baseName])
+  const artifact = loaded?.format === format ? loaded : undefined
+  const href = useObjectUrl(artifact?.content, artifact?.mime ?? 'application/octet-stream')
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -27,8 +42,9 @@ const ExportBar = ({ markdown, baseName }: { markdown: string; baseName: string 
           ))}
         </select>
       </label>
+      {artifact === undefined ? <span className="text-sm text-slate-500">Preparing…</span> : null}
       {href === undefined ? null : (
-        <a className={button.primary} href={href} download={artifact.filename}>
+        <a className={button.primary} href={href} download={artifact?.filename}>
           Download
         </a>
       )}

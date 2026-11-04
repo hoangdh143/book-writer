@@ -16,3 +16,8 @@ Feature: Exporting a completed book
     When the user downloads the export in format "Plain text (.txt)"
     Then the downloaded file is named "the-lighthouse-mystery.txt"
     And the file does not contain "#"
+
+  Scenario: Downloading the EPUB export
+    Given a completed book is open
+    When the user downloads the export in format "EPUB (.epub)"
+    Then the downloaded file is named "the-lighthouse-mystery.epub"
