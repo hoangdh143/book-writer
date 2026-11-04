@@ -14,7 +14,7 @@ final case class BookOutline(
   chapters: List[ChapterPlan]
 ) derives JsonCodec
 
-final case class WrittenChapter(plan: ChapterPlan, text: String) {
+final case class WrittenChapter(plan: ChapterPlan, text: String) derives JsonCodec {
   def wordCount: Int = text.split("\\s+").filter(_.nonEmpty).length
   def endingExcerpt(maxChars: Int = 700): String = {
     val lines = text.trim.linesIterator.toList

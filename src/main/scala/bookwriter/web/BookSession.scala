@@ -20,14 +20,43 @@ object BookSession {
 
   def make(cfg: Config): UIO[BookSession] =
     for {
-      id          <- ZIO.succeed(java.util.UUID.randomUUID().toString.take(8))
-      sessionCfg  <- ZIO.succeed(cfg.copy(out = java.nio.file.Paths.get("output", "books", id, "book.md")))
+      id      <- ZIO.succeed(java.util.UUID.randomUUID().toString.take(8))
+      session <- build(
+                   id = id,
+                   sessionCfg = cfg.copy(out = java.nio.file.Paths.get("output", "books", id, "book.md")),
+                   phase = BookPhase.Planning,
+                   events = Nil,
+                   startedAt = Instant.now()
+                 )
+    } yield session
+
+  /** Rebuilds a session persisted on disk. Gate phases get a live gate again, so
+    * approving after a restart continues the real pipeline where it stopped. */
+  def restore(persisted: PersistedSession): UIO[BookSession] =
+    build(
+      id = persisted.id,
+      sessionCfg = persisted.cfg.toConfig(persisted.id),
+      phase = SessionStore.fromPersisted(persisted.phase),
+      events = persisted.events.map { case (atMs, message) => (Instant.ofEpochMilli(atMs), message) },
+      startedAt = Instant.ofEpochMilli(persisted.startedAtMs)
+    ).flatMap { session =>
+      session.log("Session restored from disk") *> session.resume().as(session)
+    }
+
+  private def build(
+    id: String,
+    sessionCfg: Config,
+    phase: BookPhase,
+    events: List[(Instant, String)],
+    startedAt: Instant
+  ): UIO[BookSession] =
+    for {
       store       <- loki.engine.core.store.GraphStore.make
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
       graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink)
       (app, architect, writer, editor) = graph
-      stateRef    <- Ref.make(SessionView(BookPhase.Planning, None, Nil))
+      stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
     } yield {
       val session = new BookSession(
@@ -41,7 +70,7 @@ object BookSession {
         editorSink = editorSink,
         stateRef = stateRef,
         fiberRef = fiberRef,
-        startedAt = Instant.now()
+        startedAt = startedAt
       )
       app.getExecutor.addEventHook(session.eventHook)
       session
@@ -77,12 +106,46 @@ final class BookSession private[web] (
     stateRef.get.map(v => BookMapper.chapterText(v.phase, n))
 
   def start(): UIO[Unit] =
-    sessionProcess.forkDaemon.flatMap(fiber => fiberRef.set(Some(fiber)))
+    persist *> sessionProcess.forkDaemon.flatMap(fiber => fiberRef.set(Some(fiber)))
+
+  /** Continues a restored session: gate phases re-open their gate and wait for the
+    * user; mid-flight phases are closed out as interrupted failures. */
+  def resume(): UIO[Unit] =
+    stateRef.get.flatMap { v =>
+      v.phase match {
+        case BookPhase.TocReview(outline, revision) =>
+          runResumed(tocLoop(outline, revision).flatMap(afterToc))
+        case BookPhase.ChapterReview(outline, done, pending, remaining, notes) =>
+          runResumed(reviewGate(outline, done, pending, remaining, notes).flatMap { written =>
+            editStage(outline, written).flatMap { case (foreword, blurb) =>
+              finish(outline, written, foreword, blurb)
+            }
+          })
+        case BookPhase.Planning | BookPhase.Generating(_, _, _, _, _, _) | BookPhase.Editing(_, _) =>
+          setPhase(BookPhase.Failed("Session was interrupted by a server restart", v.phase.status))
+        case _ => ZIO.unit
+      }
+    }
+
+  private def runResumed(effect: ZIO[Any, Throwable, Unit]): UIO[Unit] =
+    eventDrainer.forever.fork.flatMap { drainer =>
+      effect.catchAll(fail).catchAllDefect(fail).zipRight(drainer.interrupt.unit) *> drainEvents
+    }.forkDaemon.flatMap(fiber => fiberRef.set(Some(fiber)))
 
   private def sessionProcess: UIO[Unit] =
-    eventDrainer.forever.fork.flatMap { drainer =>
-      pipeline.zipRight(drainer.interrupt.unit) *> drainEvents
-    }
+    (for {
+      _       <- log("Planning the book")
+      outline <- Stages.plan(app, architect, outlineSink, cfg)
+      outcome <- tocLoop(outline, 0)
+      _       <- afterToc(outcome)
+    } yield ()).catchAll(fail).catchAllDefect(fail)
+
+  private def afterToc(outcome: TocOutcome): ZIO[Any, Throwable, Unit] =
+    for {
+      written <- chapterLoop(outcome.outline, Nil, outcome.outline.chapters, outcome.mode, outcome.notes)
+      front   <- editStage(outcome.outline, written)
+      _       <- finish(outcome.outline, written, front._1, front._2)
+    } yield ()
 
   private def eventDrainer: UIO[Unit] =
     ZIO.succeed(Option(pendingEvents.poll())).flatMap {
@@ -167,20 +230,10 @@ final class BookSession private[web] (
 
   private def openGate(phase: BookPhase): UIO[Gate] =
     Promise.make[Nothing, Gate].flatMap { p =>
-      stateRef.update(_.copy(phase = phase, gate = Some(p))) *> p.await <* stateRef.update(_.copy(gate = None))
+      stateRef.update(_.copy(phase = phase, gate = Some(p))) *> persist *> p.await <* stateRef.update(_.copy(gate = None))
     }
 
   // ---- pipeline --------------------------------------------------------------
-
-  private def pipeline: UIO[Unit] =
-    (for {
-      _       <- log("Planning the book")
-      outline <- Stages.plan(app, architect, outlineSink, cfg)
-      outcome <- tocLoop(outline, 0)
-      written <- chapterLoop(outcome.outline, Nil, outcome.outline.chapters, outcome.mode, outcome.notes)
-      front   <- editStage(outcome.outline, written)
-      _       <- finish(outcome.outline, written, front._1, front._2)
-    } yield ()).catchAll(fail).catchAllDefect(fail)
 
   private def tocLoop(outline: BookOutline, revision: Int): ZIO[Any, Throwable, TocOutcome] =
     openGate(BookPhase.TocReview(outline, revision)).flatMap {
@@ -292,7 +345,14 @@ final class BookSession private[web] (
   // ---- helpers ---------------------------------------------------------------
 
   private def setPhase(phase: BookPhase): UIO[Unit] =
-    stateRef.update(_.copy(phase = phase))
+    stateRef.update(_.copy(phase = phase)) *> persist
+
+  /** Checkpoints the session to disk (output/books/<id>/session.json) so the book
+    * list, chapters and review gates survive server restarts. */
+  def persist: UIO[Unit] =
+    stateRef.get.flatMap { v =>
+      SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt))
+    }
 
   private def log(message: String): UIO[Unit] =
     stateRef.update { v =>

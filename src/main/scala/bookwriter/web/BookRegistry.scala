@@ -1,7 +1,7 @@
 package bookwriter.web
 
 import bookwriter.Config
-import zio.{Ref, UIO, IO, ZIO}
+import zio.{Ref, UIO, IO, ZIO, Exit}
 
 final class BookRegistry private (ref: Ref[Map[String, BookSession]]) {
 
@@ -25,12 +25,30 @@ final class BookRegistry private (ref: Ref[Map[String, BookSession]]) {
         case None    => (None, m)
       }
     }.flatMap {
-      case Some(s) => s.interrupt
+      case Some(s) => s.interrupt *> SessionStore.delete(id)
       case None    => ZIO.fail(s"no book with id '$id'")
     }
 }
 
 object BookRegistry {
-  def make: UIO[BookRegistry] = Ref.make(Map.empty[String, BookSession]).map(new BookRegistry(_))
-}
 
+  def make: UIO[BookRegistry] =
+    for {
+      ref      <- Ref.make(Map.empty[String, BookSession])
+      persisted <- SessionStore.loadAll
+      restored <- ZIO.foldLeft(persisted)(List.empty[BookSession]) { (acc, p) =>
+        BookSession.restore(p).exit.flatMap {
+          case Exit.Success(session) => ZIO.succeed(acc :+ session)
+          case Exit.Failure(cause)   =>
+            ZIO.succeed {
+              println(s"  ! could not restore book '${p.id}': ${String.valueOf(cause.squash.getMessage)}")
+              acc
+            }
+        }
+      }
+      _        <- ref.update(m => restored.map(s => s.id -> s).toMap ++ m)
+      _        <- ZIO.succeed(
+        if restored.nonEmpty then println(s"  restored ${restored.size} book session(s) from disk") else ()
+      )
+    } yield new BookRegistry(ref)
+}
