@@ -63,7 +63,8 @@ object BookServer {
         case _                                  => ""
       }
       val contentType = contentTypes.getOrElse(ext, "application/octet-stream")
-      Response(Status.Ok, zio.http.Headers("content-type" -> contentType), Body.fromCharSequence(Files.readString(path)))
+      val bytes = Files.readAllBytes(path)
+      Response(Status.Ok, zio.http.Headers("content-type" -> contentType), Body.fromChunk(zio.Chunk.fromArray(bytes)))
     }.orDie
 
   private def serveIndex: UIO[Response] =

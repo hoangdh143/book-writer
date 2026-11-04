@@ -226,6 +226,29 @@ Then('the downloaded file is named {string}', async ({ world }, name) => {
   expect(world.download?.suggestedFilename()).toBe(name)
 })
 
+Then('the epub embeds non-empty katex fonts', async ({ world }) => {
+  const download = world.download
+  expect(download).toBeDefined()
+  const buf = await readFile(await download!.path())
+  let eocd = -1
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+  }
+  expect(eocd).toBeGreaterThanOrEqual(0)
+  const count = buf.readUInt16LE(eocd + 10)
+  const fonts = []
+  let p = buf.readUInt32LE(eocd + 16)
+  for (let i = 0; i < count; i++) {
+    const nameLen = buf.readUInt16LE(p + 28)
+    const size = buf.readUInt32LE(p + 20)
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen)
+    if (name.endsWith('.woff2')) fonts.push({ name, size })
+    p += 46 + nameLen
+  }
+  expect(fonts.length).toBe(20)
+  for (const font of fonts) expect(font.size).toBeGreaterThan(1000)
+})
+
 Then('the file contains {string}', async ({ world }, fragment) => {
   const download = world.download
   expect(download).toBeDefined()

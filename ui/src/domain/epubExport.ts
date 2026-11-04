@@ -91,10 +91,14 @@ ${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type
 
 const loadFonts = async (): Promise<readonly ZipEntry[]> =>
   Promise.all(
-    Object.entries(fontLoaders).map(async ([path, loader]) => ({
-      name: `OEBPS/fonts/${path.split('/').at(-1) ?? 'font.woff2'}`,
-      bytes: new Uint8Array(await (await fetch(await loader())).arrayBuffer()),
-    })),
+    Object.entries(fontLoaders).map(async ([path, loader]) => {
+      const url = await loader()
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`font asset ${path} fetch failed: HTTP ${response.status}`)
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      if (bytes.length < 1000) throw new Error(`font asset ${path} came back empty (${bytes.length} bytes)`)
+      return { name: `OEBPS/fonts/${path.split('/').at(-1) ?? 'font.woff2'}`, bytes }
+    }),
   )
 
 export const buildEpub = async (markdown: string, baseName: string): Promise<Uint8Array> => {

@@ -1,4 +1,6 @@
 import { marked } from 'marked'
+import { extractMath } from './mathHtml'
+import type { MathPiece } from './mathHtml'
 
 export type ExportFormat = 'markdown' | 'html' | 'text' | 'epub'
 
@@ -35,8 +37,11 @@ const htmlDocument = (title: string, bodyHtml: string): string =>
     '</html>',
   ].join('\n')
 
+const NUL = String.fromCharCode(0)
+
 const stripMarkdown = (markdown: string): string =>
   markdown
+    .replace(/<span data-bw-math="(\d+)"><\/span>/g, `${NUL}$1${NUL}`)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
@@ -59,11 +64,25 @@ const buildHtml = (markdown: string, base: string): ExportArtifact => {
   }
 }
 
-const buildText = (markdown: string, base: string): ExportArtifact => ({
-  content: stripMarkdown(markdown),
-  filename: `${base}.txt`,
-  mime: 'text/plain',
-})
+const restoreMath = (stripped: string, pieces: readonly MathPiece[]): string =>
+  stripped
+    .split(NUL)
+    .map((segment, i) => {
+      if (i % 2 === 0) return segment
+      const piece = pieces[Number(segment)]
+      if (piece === undefined) return ''
+      return piece.display ? `$$${piece.tex}$$` : `$${piece.tex}$`
+    })
+    .join('')
+
+const buildText = (markdown: string, base: string): ExportArtifact => {
+  const { text, pieces } = extractMath(markdown)
+  return {
+    content: restoreMath(stripMarkdown(text), pieces),
+    filename: `${base}.txt`,
+    mime: 'text/plain',
+  }
+}
 
 const builders: Record<Exclude<ExportFormat, 'epub'>, (markdown: string, base: string) => ExportArtifact> = {
   markdown: buildMarkdown,

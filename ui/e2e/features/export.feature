@@ -21,3 +21,4 @@ Feature: Exporting a completed book
     Given a completed book is open
     When the user downloads the export in format "EPUB (.epub)"
     Then the downloaded file is named "the-lighthouse-mystery.epub"
+    And the epub embeds non-empty katex fonts
