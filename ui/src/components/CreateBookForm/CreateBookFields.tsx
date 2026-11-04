@@ -6,7 +6,6 @@ export interface FormValues {
   readonly prompt: string
   readonly chapters: string
   readonly wordsPerChapter: string
-  readonly apiKey: string
   readonly modelId: string
   readonly customModel: string
   readonly customBaseUrl: string
@@ -16,7 +15,6 @@ export const initialValues: FormValues = {
   prompt: '',
   chapters: '6',
   wordsPerChapter: '1500',
-  apiKey: '',
   modelId: 'deepseek-chat',
   customModel: '',
   customBaseUrl: '',
@@ -68,16 +66,6 @@ export const CreateBookFields = ({ values, errors, onPatch, apiKeyHint }: Props)
     </div>
     <FieldError message={errors.chapters ?? errors.wordsPerChapter} />
     <ModelFields values={values} errors={errors} onPatch={onPatch} />
-    <label className={fieldLabel}>
-      API key{' '}
-      <span className="text-slate-500">(empty = server env; OpenRouter needs a pasted key; not needed for LM Studio)</span>
-      <input
-        type="password"
-        className={input}
-        value={values.apiKey}
-        onChange={(event) => onPatch({ apiKey: event.target.value })}
-      />
-    </label>
     {apiKeyHint !== undefined ? <p className="text-xs text-sky-400">{apiKeyHint}</p> : null}
   </>
 )

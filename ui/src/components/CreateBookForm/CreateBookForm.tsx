@@ -7,7 +7,6 @@ import { providerForModelId, providerLabels, resolveModelChoice } from '../../do
 import type { KeyProvider } from '../../store/settingsStore'
 import type { ModelPreset } from '../../domain/models'
 import { useSettingsStore } from '../../store/settingsStore'
-import { trimmedOrUndefined } from '../../domain/text'
 import { button, panel } from '../../domain/uiClasses'
 import { initialValues, CreateBookFields } from './CreateBookFields'
 import type { FormValues } from './CreateBookFields'
@@ -20,7 +19,6 @@ const formSchema = z
     modelId: z.string().min(1),
     customModel: z.string(),
     customBaseUrl: z.string(),
-    apiKey: z.string(),
   })
   .superRefine((values, ctx) => {
     if (values.modelId === 'custom' && values.customModel.trim() === '') {
@@ -60,7 +58,7 @@ export const CreateBookForm = () => {
 
   const saved = savedKeyFor(values.modelId, live.presets, savedKeys)
   const apiKeyHint =
-    values.apiKey.trim() === '' && saved.key !== '' && saved.provider !== undefined
+    saved.key !== '' && saved.provider !== undefined
       ? `Using the ${providerLabels[saved.provider]} key saved in Settings`
       : undefined
 
@@ -73,12 +71,11 @@ export const CreateBookForm = () => {
     }
     setErrors({})
     const saved = savedKeyFor(parsed.data.modelId, live.presets, savedKeys)
-    const fallbackKey = saved.key === '' ? undefined : saved.key
     create.mutate({
       prompt: parsed.data.prompt,
       chapters: parsed.data.chapters,
       wordsPerChapter: parsed.data.wordsPerChapter,
-      apiKey: trimmedOrUndefined(parsed.data.apiKey) ?? fallbackKey,
+      apiKey: saved.key === '' ? undefined : saved.key,
       ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
     })
   }
