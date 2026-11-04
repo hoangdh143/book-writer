@@ -24,5 +24,6 @@ export interface CreateBookInput {
   readonly chapters?: number
   readonly wordsPerChapter?: number
   readonly model?: string
+  readonly baseUrl?: string
   readonly apiKey?: string
 }

@@ -37,3 +37,14 @@ export const statusLabel: Record<ParsedStatus, string> = {
   failed: 'Failed',
   unknown: 'Unknown',
 }
+
+export const badgeClass: Record<ParsedStatus, string> = {
+  planning: 'border-sky-800 bg-sky-950/50 text-sky-300',
+  generating: 'border-sky-800 bg-sky-950/50 text-sky-300',
+  editing: 'border-sky-800 bg-sky-950/50 text-sky-300',
+  toc_review: 'border-amber-800 bg-amber-950/50 text-amber-300',
+  chapter_review: 'border-amber-800 bg-amber-950/50 text-amber-300',
+  completed: 'border-emerald-800 bg-emerald-950/50 text-emerald-300',
+  failed: 'border-red-800 bg-red-950/50 text-red-300',
+  unknown: 'border-slate-700 bg-slate-900 text-slate-400',
+}

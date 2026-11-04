@@ -11,10 +11,13 @@ export const timeLabel = (iso: string): string => {
 export const durationLabel = (seconds: number): string =>
   `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 
-export const safeFilename = (raw: string): string => {
+export const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : 'Something went wrong'
+
+export const safeBaseName = (raw: string): string => {
   const base = raw
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase()
-  return base === '' ? 'book.md' : `${base}.md`
+  return base === '' ? 'book' : base
 }

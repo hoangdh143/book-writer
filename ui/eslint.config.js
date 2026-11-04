@@ -4,7 +4,7 @@ import functional from 'eslint-plugin-functional'
 import reactHooks from 'eslint-plugin-react-hooks'
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'coverage/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'e2e/**', '.features-gen/**', 'test-results/**', 'playwright-report/**', 'playwright.config.ts'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

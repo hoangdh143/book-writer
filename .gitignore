@@ -10,3 +10,6 @@ output/
 
 ui/node_modules/
 ui/dist/
+ui/.features-gen/
+ui/test-results/
+ui/playwright-report/

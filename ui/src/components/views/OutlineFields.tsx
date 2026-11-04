@@ -1,4 +1,5 @@
 import type { OutlinePatch, DraftOutline } from '../../domain/tocEdits'
+import { fieldLabel, input } from '../../domain/uiClasses'
 
 interface Props {
   readonly draft: DraftOutline
@@ -6,21 +7,20 @@ interface Props {
 }
 
 export const OutlineFields = ({ draft, onPatch }: Props) => (
-  <div className="outline-fields">
-    <label className="field">
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <label className={`${fieldLabel} sm:col-span-2`}>
       Title
-      <input value={draft.title} onChange={(event) => onPatch({ title: event.target.value })} />
+      <input className={input} value={draft.title} onChange={(event) => onPatch({ title: event.target.value })} />
     </label>
-    <div className="field-row">
-      <label className="field">
-        Genre
-        <input value={draft.genre} onChange={(event) => onPatch({ genre: event.target.value })} />
-      </label>
-    </div>
-    <label className="field">
+    <label className={fieldLabel}>
+      Genre
+      <input className={input} value={draft.genre} onChange={(event) => onPatch({ genre: event.target.value })} />
+    </label>
+    <label className={fieldLabel}>
       Premise
       <textarea
         rows={2}
+        className={input}
         value={draft.premise}
         onChange={(event) => onPatch({ premise: event.target.value })}
       />

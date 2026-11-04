@@ -3,6 +3,7 @@ import { bookApi } from './endpoints'
 import { bookKeys } from './bookQueries'
 import type { CreateBookInput, TocApproveInput } from './requests'
 import { useUiStore } from '../store/uiStore'
+import { reportMutationError } from '../store/toastStore'
 
 const useRefreshBooks = (): (() => void) => {
   const client = useQueryClient()
@@ -20,6 +21,7 @@ export const useCreateBook = () => {
       selectBook(created.id)
       refresh()
     },
+    onError: reportMutationError,
   })
 }
 
@@ -32,6 +34,7 @@ export const useRemoveBook = () => {
       clearSelectionIf(id)
       refresh()
     },
+    onError: reportMutationError,
   })
 }
 
@@ -40,6 +43,7 @@ export const useTocApprove = (id: string) => {
   return useMutation({
     mutationFn: (input: TocApproveInput) => bookApi.approveToc(id, input),
     onSuccess: refresh,
+    onError: reportMutationError,
   })
 }
 
@@ -48,6 +52,7 @@ export const useTocRevise = (id: string) => {
   return useMutation({
     mutationFn: (comment: string) => bookApi.reviseToc(id, comment),
     onSuccess: refresh,
+    onError: reportMutationError,
   })
 }
 
@@ -56,6 +61,7 @@ export const useChapterApprove = (id: string, number: number) => {
   return useMutation({
     mutationFn: (comment: string | undefined) => bookApi.approveChapter(id, number, comment),
     onSuccess: refresh,
+    onError: reportMutationError,
   })
 }
 
@@ -64,6 +70,7 @@ export const useChapterRevise = (id: string, number: number) => {
   return useMutation({
     mutationFn: (comment: string) => bookApi.reviseChapter(id, number, comment),
     onSuccess: refresh,
+    onError: reportMutationError,
   })
 }
 
@@ -72,5 +79,6 @@ export const useApproveRest = (id: string) => {
   return useMutation({
     mutationFn: (comment: string | undefined) => bookApi.approveRest(id, comment),
     onSuccess: refresh,
+    onError: reportMutationError,
   })
 }

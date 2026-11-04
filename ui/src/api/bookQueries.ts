@@ -16,7 +16,13 @@ export const useBook = (id: string) =>
   useQuery({
     queryKey: bookKeys.detail(id),
     queryFn: () => bookApi.get(id),
-    refetchInterval: (query) => pollInterval(query.state.data?.status ?? ''),
+    // keep polling active books; when a fresh load fails on the network,
+    // keep trying every few seconds so the view heals once the server returns
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data !== undefined) return pollInterval(data.status)
+      return query.state.error instanceof TypeError ? 3000 : false
+    },
   })
 
 export const useChapter = (id: string, number: number) =>
