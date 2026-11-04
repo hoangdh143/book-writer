@@ -2,7 +2,11 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { z } from 'zod'
 import { useCreateBook } from '../../api/bookMutations'
-import { resolveModelChoice } from '../../domain/models'
+import { useLiveModels } from '../../api/liveModels'
+import { providerForModelId, providerLabels, resolveModelChoice } from '../../domain/models'
+import type { KeyProvider } from '../../store/settingsStore'
+import type { ModelPreset } from '../../domain/models'
+import { useSettingsStore } from '../../store/settingsStore'
 import { trimmedOrUndefined } from '../../domain/text'
 import { button, panel } from '../../domain/uiClasses'
 import { initialValues, CreateBookFields } from './CreateBookFields'
@@ -34,13 +38,31 @@ const errorsOf = (error: z.ZodError): Record<string, string> =>
     return { ...acc, [key]: issue.message }
   }, {})
 
+const savedKeyFor = (
+  modelId: string,
+  livePresets: readonly ModelPreset[],
+  apiKeys: Record<KeyProvider, string>,
+): { readonly key: string; readonly provider?: KeyProvider } => {
+  const provider = providerForModelId(modelId, livePresets)
+  if (provider === undefined || provider === 'custom' || provider === 'lmstudio') return { key: '' }
+  return { key: apiKeys[provider].trim(), provider }
+}
+
 export const CreateBookForm = () => {
   const [values, setValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const create = useCreateBook()
+  const live = useLiveModels()
+  const savedKeys = useSettingsStore((state) => state.apiKeys)
 
   const patchValues = (patch: Partial<FormValues>): void =>
     setValues((current) => ({ ...current, ...patch }))
+
+  const saved = savedKeyFor(values.modelId, live.presets, savedKeys)
+  const apiKeyHint =
+    values.apiKey.trim() === '' && saved.key !== '' && saved.provider !== undefined
+      ? `Using the ${providerLabels[saved.provider]} key saved in Settings`
+      : undefined
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
@@ -50,12 +72,14 @@ export const CreateBookForm = () => {
       return
     }
     setErrors({})
+    const saved = savedKeyFor(parsed.data.modelId, live.presets, savedKeys)
+    const fallbackKey = saved.key === '' ? undefined : saved.key
     create.mutate({
       prompt: parsed.data.prompt,
       chapters: parsed.data.chapters,
       wordsPerChapter: parsed.data.wordsPerChapter,
-      apiKey: trimmedOrUndefined(parsed.data.apiKey),
-      ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl),
+      apiKey: trimmedOrUndefined(parsed.data.apiKey) ?? fallbackKey,
+      ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
     })
   }
 
@@ -63,7 +87,7 @@ export const CreateBookForm = () => {
     <form className={`${panel} flex flex-col`} onSubmit={submit}>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-300">New book</h2>
       <div className="flex flex-col gap-3">
-        <CreateBookFields values={values} errors={errors} onPatch={patchValues} />
+        <CreateBookFields values={values} errors={errors} onPatch={patchValues} apiKeyHint={apiKeyHint} />
         <button className={button.primary} type="submit" disabled={create.isPending}>
           {create.isPending ? 'Creating…' : 'Create book'}
         </button>

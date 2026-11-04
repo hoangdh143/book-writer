@@ -29,7 +29,7 @@ object BookServer {
            |  API : http://localhost:8080/api/books
            |  ui dist: $uiDist""".stripMargin
       )) *>
-        zio.http.Server.serve(apiRoutes(registry) ++ staticRoutes)
+        zio.http.Server.serve(ModelRoutes.routes ++ apiRoutes(registry) ++ staticRoutes)
           .provide(zio.http.Server.default)
           .unit
     }

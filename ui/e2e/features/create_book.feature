@@ -11,6 +11,12 @@ Feature: Create a new book
     And the book appears in the list
     And the panel shows a planning book
 
+  Scenario: Creating a book with a local LM Studio model
+    When the user writes the idea "A heist on a floating city"
+    And the user selects the model "qwen2.5-7b-instruct"
+    And the user clicks "Create book"
+    Then the create request has model "qwen2.5-7b-instruct" and base url "http://localhost:1234/v1/chat/completions"
+
   Scenario: A custom model requires a model id
     When the user selects the model "Custom model…"
     And the user clicks "Create book"
@@ -21,3 +27,12 @@ Feature: Create a new book
     When the user writes the idea "A quiet ghost story"
     And the user clicks "Create book"
     Then an error toast contains "no API key"
+
+  Scenario: A locally saved API key is used for creating books
+    When the user opens settings
+    And the user saves the OpenRouter API key "sk-or-test"
+    And the user reloads the page
+    And the user writes the idea "A heist on a floating city"
+    And the user selects the model "Llama 3.3 70B Instruct"
+    And the user clicks "Create book"
+    Then the create request has api key "sk-or-test"

@@ -104,3 +104,7 @@ final case class OkDto(ok: Boolean = true) derives JsonCodec
 final case class HealthDto(ok: Boolean = true, app: String = "book-writer") derives JsonCodec
 
 final case class ApiErrorDto(error: String) derives JsonCodec
+
+final case class LmStudioModelDto(id: String) derives JsonCodec
+
+final case class LmStudioModelsDto(data: List[LmStudioModelDto]) derives JsonCodec

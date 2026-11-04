@@ -96,7 +96,16 @@ When('the user sets chapters to {int} and words per chapter to {int}', async ({ 
 })
 
 When('the user selects the model {string}', async ({ page }, label) => {
-  await page.getByLabel('Model').selectOption({ label })
+  await page.getByLabel('Model', { exact: true }).click()
+  await page.getByRole('option', { name: label }).click()
+})
+
+When('the user opens settings', async ({ page }) => {
+  await page.getByRole('button', { name: 'Settings' }).click()
+})
+
+When('the user saves the OpenRouter API key {string}', async ({ page }, key) => {
+  await page.getByLabel('OpenRouter API key').fill(key)
 })
 
 When('the user clicks {string}', async ({ page }, name) => {
@@ -152,6 +161,10 @@ When('the user downloads the export in format {string}', async ({ page, world },
 Then('the create request has model {string} and base url {string}', async ({ world }, model, baseUrl) => {
   expect(world.createBook?.['model']).toBe(model)
   expect(world.createBook?.['baseUrl']).toBe(baseUrl)
+})
+
+Then('the create request has api key {string}', async ({ world }, apiKey) => {
+  expect(world.createBook?.['apiKey']).toBe(apiKey)
 })
 
 Then('the book appears in the list', async ({ page }) => {

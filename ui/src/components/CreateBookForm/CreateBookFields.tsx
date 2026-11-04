@@ -26,9 +26,10 @@ interface Props {
   readonly values: FormValues
   readonly errors: Record<string, string>
   readonly onPatch: (patch: Partial<FormValues>) => void
+  readonly apiKeyHint?: string
 }
 
-export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
+export const CreateBookFields = ({ values, errors, onPatch, apiKeyHint }: Props) => (
   <>
     <label className={fieldLabel}>
       Idea
@@ -68,7 +69,8 @@ export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
     <FieldError message={errors.chapters ?? errors.wordsPerChapter} />
     <ModelFields values={values} errors={errors} onPatch={onPatch} />
     <label className={fieldLabel}>
-      API key <span className="text-slate-500">(empty = server env; OpenRouter needs a pasted key)</span>
+      API key{' '}
+      <span className="text-slate-500">(empty = server env; OpenRouter needs a pasted key; not needed for LM Studio)</span>
       <input
         type="password"
         className={input}
@@ -76,5 +78,6 @@ export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
         onChange={(event) => onPatch({ apiKey: event.target.value })}
       />
     </label>
+    {apiKeyHint !== undefined ? <p className="text-xs text-sky-400">{apiKeyHint}</p> : null}
   </>
 )

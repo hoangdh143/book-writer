@@ -1,6 +1,8 @@
-import { modelPresets, groupedProviders, providerLabels, isCustomChoice } from '../../domain/models'
+import { isCustomChoice } from '../../domain/models'
 import { fieldLabel, input } from '../../domain/uiClasses'
 import { FieldError } from '../FieldError'
+import { ModelSelect } from './ModelSelect'
+import { ModelToolsWarning } from './ModelToolsWarning'
 import type { FormValues } from './CreateBookFields'
 
 interface Props {
@@ -11,27 +13,8 @@ interface Props {
 
 export const ModelFields = ({ values, errors, onPatch }: Props) => (
   <>
-    <label className={fieldLabel}>
-      Model
-      <select
-        className={input}
-        value={values.modelId}
-        onChange={(event) => onPatch({ modelId: event.target.value })}
-      >
-        {groupedProviders.map((provider) => (
-          <optgroup key={provider} label={providerLabels[provider]}>
-            {modelPresets
-              .filter((preset) => preset.provider === provider)
-              .map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-        <option value="custom">Custom model…</option>
-      </select>
-    </label>
+    <ModelSelect modelId={values.modelId} onSelect={(modelId) => onPatch({ modelId })} />
+    <ModelToolsWarning modelId={values.modelId} />
     {isCustomChoice(values.modelId) ? (
       <div className="flex flex-col gap-2">
         <label className={fieldLabel}>

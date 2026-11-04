@@ -51,6 +51,39 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
   await page.route('**/api/books/b1/chapters/2', async (route) => {
     await json(route, world.chapterText)
   })
+
+  await mockOpenRouterModels(page)
+  await mockLmStudioModels(page)
+}
+
+export const mockOpenRouterModels = async (page: Page): Promise<void> => {
+  await page.route('**/openrouter.ai/api/v1/models', async (route) => {
+    await json(route, {
+      data: [
+        {
+          id: 'meta-llama/llama-3.3-70b-instruct',
+          name: 'Llama 3.3 70B Instruct',
+          supported_parameters: ['tools', 'temperature'],
+        },
+        {
+          id: 'anthropic/claude-sonnet-4',
+          name: 'Claude Sonnet 4',
+          supported_parameters: ['tools'],
+        },
+        {
+          id: 'google/gemini-2.5-flash',
+          name: 'Gemini 2.5 Flash',
+          supported_parameters: ['temperature'],
+        },
+      ],
+    })
+  })
+}
+
+export const mockLmStudioModels = async (page: Page): Promise<void> => {
+  await page.route('**/api/models/lmstudio', async (route) => {
+    await json(route, { data: [{ id: 'qwen2.5-7b-instruct' }, { id: 'llama-3.2-3b-instruct' }] })
+  })
 }
 
 export const mockTocActions = async (page: Page, world: World): Promise<void> => {

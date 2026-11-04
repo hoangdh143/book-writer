@@ -20,6 +20,23 @@ final case class Config(
 
 object Config {
 
+  private val defaultBaseUrl = "https://api.deepseek.com/chat/completions"
+
+  private val localPrefixes = List(
+    "http://localhost",
+    "https://localhost",
+    "http://127.0.0.1",
+    "https://127.0.0.1",
+    "http://[::1]",
+    "https://[::1]"
+  )
+
+  /** Local endpoints (e.g. LM Studio) need no API key. */
+  private def isLocalBaseUrl(url: String): Boolean = {
+    val lowered = url.toLowerCase
+    localPrefixes.exists(lowered.startsWith)
+  }
+
   val usage: String =
     """
       |book-writer — generate a full book from a prompt, on loki-engine
@@ -38,7 +55,8 @@ object Config {
       |  --concurrency <n>     1 = chapters written sequentially with continuity (default);
       |                        >1 = chapters written in parallel via loki BatchExecutor
       |  --model <name>        OpenAI-compatible model id (default deepseek-chat)
-      |  --api-key <key>       API key; falls back to env DEEPSEEK_API_KEY or OPENAI_API_KEY
+      |  --api-key <key>       API key; falls back to env DEEPSEEK_API_KEY or OPENAI_API_KEY.
+  |                        Not required when --base-url points at a local endpoint (e.g. LM Studio)
       |  --base-url <url>      OpenAI-compatible chat-completions endpoint
       |                        (default https://api.deepseek.com/chat/completions)
       |  --temperature <t>     Sampling temperature (default 0.8)
@@ -53,6 +71,7 @@ object Config {
   def fromRequest(req: bookwriter.web.CreateBookRequest): Either[String, Config] = {
     val envKey = sys.env.getOrElse("DEEPSEEK_API_KEY", sys.env.getOrElse("OPENAI_API_KEY", ""))
     val apiKey = req.apiKey.getOrElse(envKey)
+    val baseUrl = req.baseUrl.getOrElse(defaultBaseUrl)
     val chapters = req.chapters.getOrElse(6)
     val words = req.wordsPerChapter.getOrElse(1500)
     val concurrency = req.concurrency.getOrElse(1)
@@ -65,7 +84,7 @@ object Config {
       _ <- inRange("concurrency", concurrency, 1, 10)
       _ <- if (temperature < 0.0 || temperature > 2.0) Left("temperature must be in 0.0..2.0") else Right(())
       _ <- if (req.prompt.trim.isEmpty) Left("prompt must not be empty") else Right(())
-      _ <- if (apiKey.isEmpty) Left("no API key: pass apiKey or set DEEPSEEK_API_KEY") else Right(())
+      _ <- if (apiKey.isEmpty && !isLocalBaseUrl(baseUrl)) Left("no API key: pass apiKey or set DEEPSEEK_API_KEY") else Right(())
     } yield Config(
       prompt = req.prompt.trim,
       chapters = chapters,
@@ -74,7 +93,7 @@ object Config {
       concurrency = concurrency,
       model = req.model.getOrElse("deepseek-chat"),
       apiKey = apiKey,
-      baseUrl = req.baseUrl.getOrElse("https://api.deepseek.com/chat/completions"),
+      baseUrl = baseUrl,
       temperature = temperature,
       skipEditor = req.skipEditor.getOrElse(false)
     )
@@ -95,7 +114,8 @@ object Config {
         val next = cfg.copy(prompt = prompt, apiKey = if (cfg.apiKey.nonEmpty) cfg.apiKey else envKey)
         if (next.serve) Right(next)
         else if (prompt.isEmpty) Left(usage)
-        else if (next.apiKey.isEmpty) Left("No API key found. Pass --api-key or set DEEPSEEK_API_KEY.\n" + usage)
+        else if (next.apiKey.isEmpty && !isLocalBaseUrl(next.baseUrl))
+          Left("No API key found. Pass --api-key or set DEEPSEEK_API_KEY.\n" + usage)
         else Right(next)
       case "--prompt" :: v :: t      => loop(t, cfg.copy(prompt = v), positional)
       case "--chapters" :: v :: t    => intOf(v) match {
