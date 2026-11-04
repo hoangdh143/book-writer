@@ -61,7 +61,7 @@ object Config {
       |                        chapters are written in consecutive segments)
       |  --out <path>          Output markdown file (default output/book.md)
       |  --concurrency <n>     1 = chapters written sequentially with continuity (default);
-      |                        >1 = chapters written in parallel via loki BatchExecutor
+      |                        >1 = chapters written concurrently (ZIO foreachPar)
       |  --model <name>        OpenAI-compatible model id (default deepseek-chat)
       |  --api-key <key>       API key; falls back to env DEEPSEEK_API_KEY or OPENAI_API_KEY.
   |                        Not required when --base-url points at a local endpoint (e.g. LM Studio)
