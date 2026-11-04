@@ -20,6 +20,27 @@ const BookView = ({ book }: { book: Book }) => (
   </section>
 )
 
+const SavedCopyPanel = ({
+  title,
+  message,
+  error,
+  onBack,
+  onRetry,
+  cached,
+}: {
+  title: string
+  message: string
+  error: unknown
+  onBack: () => void
+  onRetry?: () => void
+  cached: Book
+}) => (
+  <section className="flex flex-col gap-4">
+    <ErrorPanel title={title} message={message} error={error} onBack={onBack} onRetry={onRetry} />
+    <BookView book={cached} />
+  </section>
+)
+
 export const BookDetail = ({ id }: { id: string }) => {
   const query = useBook(id)
   const selectBook = useUiStore((state) => state.selectBook)
@@ -34,48 +55,41 @@ export const BookDetail = ({ id }: { id: string }) => {
   if (query.isPending) return <p className="text-sm text-slate-500">Loading book…</p>
 
   if (query.isError) {
-    if (cached !== undefined) {
+    const notFound = query.error instanceof ApiError && query.error.status === 404
+    const back = () => selectBook(null)
+    const retry = () => {
+      void query.refetch()
+    }
+    if (notFound && cached !== undefined) {
       return (
-        <section className="flex flex-col gap-4">
-          <ErrorPanel
-            title="Reconnecting — showing your saved copy"
-            message="The server is unreachable. The completed book below was saved in your browser, so downloads keep working."
-            error={query.error}
-            onRetry={() => {
-              void query.refetch()
-            }}
-          />
-          <BookView book={cached} />
-        </section>
+        <SavedCopyPanel
+          title="Not on the server — showing your saved copy"
+          message="This book is no longer on the server (it was generated before session persistence, or deleted there). The completed copy below was saved in your browser, so downloads keep working."
+          error={query.error}
+          onBack={back}
+          cached={cached}
+        />
       )
     }
-    const notFound = query.error instanceof ApiError && query.error.status === 404
     if (notFound) {
+      return <ErrorPanel title="Book not found" error={query.error} onBack={back} />
+    }
+    if (cached !== undefined) {
       return (
-        <ErrorPanel
-          title="Book not found"
+        <SavedCopyPanel
+          title="Reconnecting — showing your saved copy"
+          message="The server is unreachable. The completed book below was saved in your browser, so downloads keep working."
           error={query.error}
-          onBack={() => selectBook(null)}
+          onBack={back}
+          onRetry={retry}
+          cached={cached}
         />
       )
     }
     return query.error instanceof TypeError ? (
-      <ErrorPanel
-        title="Cannot reach the server"
-        message={networkHelp}
-        error={query.error}
-        onRetry={() => {
-          void query.refetch()
-        }}
-      />
+      <ErrorPanel title="Cannot reach the server" message={networkHelp} error={query.error} onRetry={retry} />
     ) : (
-      <ErrorPanel
-        title="Could not load the book"
-        error={query.error}
-        onRetry={() => {
-          void query.refetch()
-        }}
-      />
+      <ErrorPanel title="Could not load the book" error={query.error} onRetry={retry} />
     )
   }
 
