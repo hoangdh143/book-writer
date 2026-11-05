@@ -1,8 +1,8 @@
 package bookwriter
 
-import zio.{UIO, ZIO}
+import zio.{Semaphore, UIO, ZIO}
 import loki.engine.app.{GraphApp, createAgent, createTool, createContext}
-import loki.engine.backend.OpenAIBackend
+import loki.engine.backend.{LLMBackend, OpenAIBackend}
 import loki.engine.core.nodes.{AgentNode, ExecutionPolicy, RetryPolicy}
 import loki.engine.core.store.GraphStore
 
@@ -35,13 +35,15 @@ object BookGraph {
     store: GraphStore,
     cfg: Config,
     outlineSink: OutlineSink,
-    editorSink: EditorSink
+    editorSink: EditorSink,
+    llmPermits: Option[Semaphore] = None
   ): UIO[(GraphApp, AgentNode, AgentNode, AgentNode, Option[ScholarGraph])] = {
-    val backend = new OpenAIBackend(
+    val openAi = new OpenAIBackend(
       baseUrl = cfg.baseUrl,
       apiKey = cfg.apiKey,
       temperature = Some(cfg.temperature)
     )
+    val backend: LLMBackend = llmPermits.fold[LLMBackend](openAi)(new LimitedBackend(openAi, _))
     val app = new GraphApp(store, backend = Some(backend))
 
     app.registerTool(RefMeta, (input: Any) => outlineSink.bookMeta(input))

@@ -54,7 +54,7 @@ object BookSession {
       store       <- loki.engine.core.store.GraphStore.make
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
-      graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink)
+      graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink, Some(bookwriter.LlmLimiter.shared))
       (app, architect, writer, editor, scholar) = graph
       stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
@@ -475,10 +475,8 @@ final class BookSession private[web] (
     }.sortBy(_.number).zipWithIndex.map { case (c, i) => c.copy(number = i + 1) }
 
   private def attachContinuity(draft: ChapterDraft): UIO[Unit] =
-    if (cfg.concurrency > 1) ZIO.unit
-    else
-      app.getExecutor
-        .materialiseOutput(writer, draft.text, draft.context)
-        .flatMap(node => app.connectContext(writer, node, weight = Some(0.95)).unit)
-        .catchAll(_ => ZIO.unit)
+    app.getExecutor
+      .materialiseOutput(writer, draft.text, draft.context)
+      .flatMap(node => app.connectContext(writer, node, weight = Some(0.95)).unit)
+      .catchAll(_ => ZIO.unit)
 }

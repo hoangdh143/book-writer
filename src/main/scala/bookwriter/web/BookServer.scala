@@ -27,6 +27,7 @@ object BookServer {
         s"""book-writer server ready
            |  UI  : http://localhost:8080/
            |  API : http://localhost:8080/api/books
+           |  LLM calls at once, across all books: ${bookwriter.LlmLimiter.max}
            |  ui dist: $uiDist""".stripMargin
       )) *>
         zio.http.Server.serve(ModelRoutes.routes ++ apiRoutes(registry) ++ staticRoutes)

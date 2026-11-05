@@ -17,6 +17,23 @@ Feature: Create a new book
     And the user clicks "Create book"
     Then the create request has model "qwen2.5-7b-instruct" and base url "http://localhost:1234/v1/chat/completions"
 
+  Scenario: Creating a book with a Wiro uncensored model and a saved key
+    When the user opens settings
+    And the user saves the Wiro API key "wiro-test"
+    And the user reloads the page
+    And the user writes the idea "A heist on a floating city"
+    And the user selects the model "Qwen3.8 27B Uncensored"
+    And the user clicks "Create book"
+    Then the create request has model "qwen/qwen3-8-27b-uncensored" and base url "https://llm.wiro.ai/v1/chat/completions"
+    And the create request has api key "wiro-test"
+
+  Scenario: Settings saved before Wiro existed keep working
+    Given the browser has settings saved with only an OpenRouter API key "sk-or-old"
+    When the user writes the idea "A heist on a floating city"
+    And the user selects the model "Qwen3.8 27B Uncensored"
+    And the user clicks "Create book"
+    Then the create request has model "qwen/qwen3-8-27b-uncensored" and base url "https://llm.wiro.ai/v1/chat/completions"
+
   Scenario: A half-written idea survives a look at another book
     Given the book API lists a completed book
     When the user writes the idea "A heist on a floating city"

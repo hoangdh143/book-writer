@@ -98,13 +98,20 @@ requirement, but `loki-engine` must be checked out next to this repository (`../
 docker compose up --build -d    # then open http://localhost:8090
 ```
 
-- **API keys:** add them in the app's Settings, or put `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` in a
-  `.env` file beside `compose.yaml`.
+- **API keys:** add them in the app's Settings, or put `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` /
+  `WIRO_API_KEY` in a `.env` file beside `compose.yaml`.
 - **Port:** set `PORT` in `.env` to use something other than 8090.
 - **Books:** stored in the `book-writer-output` Docker volume, so they survive rebuilds. `docker
   compose down -v` deletes them. Session files in this volume include the API key used for each book.
 - **LM Studio:** reached on the host through `host.docker.internal:1234`. Set `LM_STUDIO_BASE_URL`
   to use a different address.
+- **Wiro:** the model picker lists Wiro's uncensored Qwen models. Use a Wiro project key, or
+  `KEY:SECRET` for a signature project. These models only ever use `WIRO_API_KEY` from the environment.
+  For the rest of the Wiro catalog, choose *Custom model…* with the base URL
+  `https://llm.wiro.ai/v1/chat/completions`; custom models use the environment key, not one saved in Settings.
+- **Running several books:** the server can generate any number of books at once. `LLM_MAX_CONCURRENCY`
+  (default 4) limits the LLM calls in flight across all of them, and further calls queue for a free slot.
+  Lower it if your provider returns rate-limit errors. The CLI is not limited by this setting.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.
@@ -135,7 +142,7 @@ environment variable. The API key comes from `--api-key`, `DEEPSEEK_API_KEY` or 
 | `--chapters <n>` | 6 | Target number of chapters (1–30) |
 | `--words <n>` | 1500 | Target words per chapter (200–5000) |
 | `--out <path>` | `output/book.md` | Output Markdown file |
-| `--concurrency <n>` | 1 | 1 = sequential with full continuity; >1 = parallel `BatchExecutor` |
+| `--concurrency <n>` | 1 | 1 = sequential with full continuity; >1 = parallel `BatchExecutor` (CLI only; the server rejects values above 1) |
 | `--model <name>` | `deepseek-chat` | OpenAI-compatible model id |
 | `--api-key <key>` | env | API key |
 | `--base-url <url>` | DeepSeek | Chat-completions endpoint |

@@ -128,6 +128,20 @@ When('the user opens settings', async ({ page }) => {
   await page.getByRole('button', { name: 'Settings' }).click()
 })
 
+Given('the browser has settings saved with only an OpenRouter API key {string}', async ({ page }, key) => {
+  await page.evaluate((openrouter) => {
+    localStorage.setItem(
+      'book-writer-settings',
+      JSON.stringify({ state: { apiKeys: { deepseek: '', openai: '', openrouter } }, version: 0 }),
+    )
+  }, key)
+  await page.reload()
+})
+
+When('the user saves the Wiro API key {string}', async ({ page }, key) => {
+  await page.getByLabel('Wiro API key').fill(key)
+})
+
 When('the user saves the OpenRouter API key {string}', async ({ page }, key) => {
   await page.getByLabel('OpenRouter API key').fill(key)
 })
