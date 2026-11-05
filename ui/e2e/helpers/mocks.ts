@@ -57,6 +57,19 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
     await json(route, world.chapterText)
   })
 
+  await page.route('**/api/settings', async (route) => {
+    const request = route.request()
+    if (request.method() === 'PUT') {
+      if (world.settingsError !== undefined) {
+        await json(route, { error: world.settingsError }, 500)
+        return
+      }
+      world.settingsSaved = await request.postDataJSON()
+      world.llmMaxConcurrency = Number(world.settingsSaved?.['llmMaxConcurrency'])
+    }
+    await json(route, { llmMaxConcurrency: world.llmMaxConcurrency })
+  })
+
   await mockOpenRouterModels(page)
   await mockLmStudioModels(page)
 }

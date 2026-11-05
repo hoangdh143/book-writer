@@ -29,6 +29,36 @@ Feature: Create a new book
     And the user clicks "Add one"
     Then the settings dialog is open
 
+  Scenario: Concurrent LLM calls can be changed in settings
+    When the user opens settings
+    Then concurrent LLM calls shows 4
+    When the user sets concurrent LLM calls to "8"
+    And the user saves concurrent LLM calls
+    Then the server saved concurrent LLM calls as 8
+    And the settings dialog says "Saved."
+    When the user reloads the page
+    And the user opens settings
+    Then concurrent LLM calls shows 8
+
+  Scenario Outline: An out-of-range concurrent LLM calls value cannot be saved
+    When the user opens settings
+    And the user sets concurrent LLM calls to "<value>"
+    Then saving concurrent LLM calls is disabled
+    And the settings dialog says "Enter a whole number from 1 to 100."
+
+    Examples:
+      | value |
+      | 0     |
+      | 101   |
+      | 2.5   |
+
+  Scenario: A failed concurrent LLM calls save is shown in the dialog
+    Given the server rejects saving settings with "could not save settings"
+    When the user opens settings
+    And the user sets concurrent LLM calls to "8"
+    And the user saves concurrent LLM calls
+    Then the settings dialog says "could not save settings"
+
   Scenario: The settings dialog only closes on purpose
     When the user opens settings
     And the user clicks inside the settings dialog

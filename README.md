@@ -105,9 +105,11 @@ docker compose up --build -d    # then open http://localhost:8090
   compose down -v` deletes them. Session files in this volume include the API key used for each book.
 - **LM Studio:** reached on the host through `host.docker.internal:1234`. Set `LM_STUDIO_BASE_URL`
   to use a different address.
-- **Running several books:** the server can generate any number of books at once. `LLM_MAX_CONCURRENCY`
-  (default 4) limits the LLM calls in flight across all of them, and further calls queue for a free slot.
-  Lower it if your provider returns rate-limit errors. The CLI is not limited by this setting.
+- **Running several books:** the server can generate any number of books at once. **Concurrent LLM calls**
+  in the app's Settings (1–100, default 4) limits the calls in flight across all of them, and further calls
+  queue for a free slot. A change applies right away and is saved in `output/settings.json`. Lower it if your
+  provider returns rate-limit errors. `LLM_MAX_CONCURRENCY` sets the starting value until one is saved in
+  Settings, which then takes priority. The CLI is not limited by this setting.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.

@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.Config
+import bookwriter.{Config, LlmLimiter, LlmSettings}
 import zio.http.{Body, Headers, Method, Request, Response, Routes, Status, handler, string}
 import zio.json._
 import zio.ZIO
@@ -13,6 +13,8 @@ object BookRoutes {
     Routes(
       Method.GET / "api" / "health" -> handler((_: Request) => ZIO.succeed(json(Status.Ok, HealthDto().toJson))),
       Method.GET / "api" / "analyze" -> handler((_: Request) => ZIO.succeed(json(Status.Ok, HealthDto().toJson))),
+      Method.GET / "api" / "settings" -> handler((_: Request) => getSettings),
+      Method.PUT / "api" / "settings" -> handler((req: Request) => putSettings(req)),
       Method.GET / "api" / "books" -> handler((_: Request) => listBooks(registry)),
       Method.POST / "api" / "books" -> handler((req: Request) => createBook(registry, req)),
       Method.GET / "api" / "books" / string("id") -> handler((id: String, _: Request) => withSession(registry, id)(_.dto.map(b => json(Status.Ok, b.toJson)))),
@@ -27,6 +29,22 @@ object BookRoutes {
     )
 
   // ---- handlers ---------------------------------------------------------------
+
+  private def getSettings: ZIO[Any, Response, Response] =
+    LlmLimiter.gate.limit.map(limit => json(Status.Ok, LlmSettings(limit).toJson))
+
+  private def putSettings(req: Request): ZIO[Any, Response, Response] =
+    decode[LlmSettings](req).flatMap { settings =>
+      ZIO
+        .fromEither(LlmLimiter.validate(settings.llmMaxConcurrency))
+        .mapError(e => json(Status.BadRequest, ApiErrorDto(e).toJson))
+        .flatMap(limit =>
+          LlmLimiter.save(limit).mapError(e =>
+            json(Status.InternalServerError, ApiErrorDto(s"could not save settings: ${e.getMessage}").toJson)
+          )
+        )
+        .as(json(Status.Ok, settings.toJson))
+    }
 
   private def listBooks(registry: BookRegistry): ZIO[Any, Response, Response] =
     registry.list

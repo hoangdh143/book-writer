@@ -23,13 +23,13 @@ object BookServer {
 
   def serveForever(cfg: Config): ZIO[Any, Throwable, Unit] =
     BookRegistry.make.flatMap { registry =>
-      ZIO.succeed(println(
+      bookwriter.LlmLimiter.gate.limit.flatMap(limit => ZIO.succeed(println(
         s"""book-writer server ready
            |  UI  : http://localhost:8080/
            |  API : http://localhost:8080/api/books
-           |  LLM calls at once, across all books: ${bookwriter.LlmLimiter.max}
+           |  LLM calls at once, across all books: $limit
            |  ui dist: $uiDist""".stripMargin
-      )) *>
+      ))) *>
         zio.http.Server.serve(ModelRoutes.routes ++ apiRoutes(registry) ++ staticRoutes)
           .provide(zio.http.Server.default)
           .unit

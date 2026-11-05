@@ -17,6 +17,9 @@ export interface World {
   offline: boolean
   chapterText: ChapterText
   download: Download | undefined
+  llmMaxConcurrency: number
+  settingsSaved: Record<string, unknown> | undefined
+  settingsError: string | undefined
 }
 
 export const createWorld = (): World => ({
@@ -35,4 +38,7 @@ export const createWorld = (): World => ({
   offline: false,
   chapterText: { number: 0, title: '', text: '' },
   download: undefined,
+  llmMaxConcurrency: 4,
+  settingsSaved: undefined,
+  settingsError: undefined,
 })

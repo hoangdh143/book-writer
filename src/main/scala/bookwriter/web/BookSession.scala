@@ -54,7 +54,7 @@ object BookSession {
       store       <- loki.engine.core.store.GraphStore.make
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
-      graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink, Some(bookwriter.LlmLimiter.shared))
+      graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink, Some(bookwriter.LlmLimiter.gate))
       (app, architect, writer, editor, scholar) = graph
       stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)

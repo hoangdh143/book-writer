@@ -46,5 +46,7 @@ export const http = {
   get: <T>(path: string, decode: Decode<T>): Promise<T> => request(decode, { method: 'GET', path }),
   post: <T>(path: string, decode: Decode<T>, body?: unknown): Promise<T> =>
     request(decode, { method: 'POST', path, body }),
+  put: <T>(path: string, decode: Decode<T>, body?: unknown): Promise<T> =>
+    request(decode, { method: 'PUT', path, body }),
   delete: <T>(path: string, decode: Decode<T>): Promise<T> => request(decode, { method: 'DELETE', path }),
 }

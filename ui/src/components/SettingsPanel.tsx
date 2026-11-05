@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { button, fieldLabel, hint, input, sectionHeading } from '../domain/uiClasses'
 import { providerLabels } from '../domain/models'
 import { keyProviders, useSettingsStore } from '../store/settingsStore'
+import { ConcurrencySetting } from './ConcurrencySetting'
 
 interface Props {
   readonly onClose: () => void
@@ -48,10 +49,13 @@ export const SettingsPanel = ({ onClose }: Props) => {
             </label>
           ))}
         </div>
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <div className="mt-3 flex justify-end">
           <button className={button.quiet} disabled={noKeys} onClick={clearApiKeys}>
             Clear saved keys
           </button>
+        </div>
+        <ConcurrencySetting />
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button className={button.primary} onClick={onClose}>
             Done
           </button>

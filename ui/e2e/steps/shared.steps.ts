@@ -132,6 +132,37 @@ When('the user saves the OpenRouter API key {string}', async ({ page }, key) => 
   await page.getByLabel('OpenRouter API key').fill(key)
 })
 
+Given('the server rejects saving settings with {string}', async ({ world }, message) => {
+  world.settingsError = message
+})
+
+When('the user sets concurrent LLM calls to {string}', async ({ page }, value) => {
+  const field = page.getByLabel('Concurrent LLM calls')
+  await expect(field).toBeEnabled()
+  await field.fill(value)
+})
+
+When('the user saves concurrent LLM calls', async ({ page }) => {
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Save', exact: true }).click()
+})
+
+Then('concurrent LLM calls shows {int}', async ({ page }, value) => {
+  await expect(page.getByLabel('Concurrent LLM calls')).toHaveValue(String(value))
+})
+
+Then('the server saved concurrent LLM calls as {int}', async ({ page, world }, value) => {
+  await expect.poll(() => world.settingsSaved).toEqual({ llmMaxConcurrency: value })
+  await expect(page.getByLabel('Concurrent LLM calls')).toHaveValue(String(value))
+})
+
+Then('saving concurrent LLM calls is disabled', async ({ page }) => {
+  await expect(page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+})
+
+Then('the settings dialog says {string}', async ({ page }, message) => {
+  await expect(page.getByRole('dialog', { name: 'Settings' }).getByText(message)).toBeVisible()
+})
+
 When('the user clicks inside the settings dialog', async ({ page }) => {
   await page.getByRole('dialog', { name: 'Settings' }).click({ position: { x: 4, y: 4 } })
 })
