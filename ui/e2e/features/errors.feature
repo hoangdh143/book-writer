@@ -10,7 +10,7 @@ Feature: Error handling
     Given the book detail endpoint returns not found
     When a book is selected
     Then the error panel "Book not found" is visible
-    When the user clicks "Back to books"
+    When the user clicks "Close"
     Then the empty state is visible
 
   Scenario: An unknown status falls back gracefully

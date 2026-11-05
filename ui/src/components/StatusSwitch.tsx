@@ -4,7 +4,7 @@ import { parseStatus } from '../domain/bookStatus'
 import { panel } from '../domain/uiClasses'
 import { TocReviewView } from './views/TocReviewView'
 import { ChapterReviewView } from './views/ChapterReviewView'
-import { ProgressView } from './views/ProgressView'
+import { ProgressView, WorkingNote } from './views/ProgressView'
 import { CompletedView } from './views/CompletedView'
 import { FailedView } from './views/FailedView'
 
@@ -15,8 +15,8 @@ const UnknownStatus = ({ status }: { status: string }) => (
 )
 
 const PlanningPanel = () => (
-  <section className={`${panel} animate-pulse`}>
-    <p className="text-sm text-slate-400">Planning the book — the architect is drafting a table of contents…</p>
+  <section className={panel}>
+    <WorkingNote note="Planning the book — the architect is drafting a table of contents…" />
   </section>
 )
 

@@ -8,14 +8,15 @@ import {
 import { useChapter } from '../../api/bookQueries'
 import { pendingChapterNumber } from '../../domain/chapters'
 import { trimmedOrUndefined } from '../../domain/text'
-import { actionRow, button, panel, prose } from '../../domain/uiClasses'
-import { CommentBox } from '../CommentBox'
+import { button, hint, sectionHeading } from '../../domain/uiClasses'
 import { ErrorPanel } from '../ErrorPanel'
+import { Manuscript } from '../Manuscript'
+import { ReviewBar } from '../ReviewBar'
 
 export const ChapterReviewView = ({ book }: { book: Book }) => {
   const number = pendingChapterNumber(book)
   return number === undefined ? (
-    <p className="text-sm text-slate-500">No chapter is awaiting review.</p>
+    <p className="text-sm text-slate-400">No chapter is awaiting review.</p>
   ) : (
     <PendingChapterReview book={book} number={number} />
   )
@@ -29,7 +30,7 @@ const PendingChapterReview = ({ book, number }: { book: Book; number: number }) 
   const approveRest = useApproveRest(book.id)
   const busy = approve.isPending || revise.isPending || approveRest.isPending
 
-  if (chapter.isPending) return <p className="text-sm text-slate-500">Loading chapter {number}…</p>
+  if (chapter.isPending) return <p className="text-sm text-slate-400">Loading chapter {number}…</p>
   if (chapter.isError) {
     return (
       <ErrorPanel
@@ -44,17 +45,27 @@ const PendingChapterReview = ({ book, number }: { book: Book; number: number }) 
 
   const text = chapter.data
   return (
-    <section className={`${panel} flex flex-col`}>
-      <h2 className="text-base font-semibold text-slate-100">
-        Chapter {text.number}: {text.title}
-      </h2>
-      <pre className={`${prose} mt-3`}>{text.text}</pre>
-      <CommentBox
-        label="Comment (optional to approve, required for revision)"
-        value={comment}
-        onChange={setComment}
-      />
-      <div className={actionRow}>
+    <section className="flex flex-col">
+      <p className={hint}>
+        Chapter {text.number} of {book.totalChapters}
+      </p>
+      <h3 className={`${sectionHeading} mb-5`}>{text.title}</h3>
+      <Manuscript markdown={text.text} />
+      <ReviewBar comment={comment} onComment={setComment}>
+        <button
+          className={button.quiet}
+          disabled={busy || comment.trim() === ''}
+          onClick={() => revise.mutate(comment.trim())}
+        >
+          Request revision
+        </button>
+        <button
+          className={button.secondary}
+          disabled={busy}
+          onClick={() => approveRest.mutate(trimmedOrUndefined(comment))}
+        >
+          Approve and write the rest
+        </button>
         <button
           className={button.primary}
           disabled={busy}
@@ -62,21 +73,7 @@ const PendingChapterReview = ({ book, number }: { book: Book; number: number }) 
         >
           Approve chapter
         </button>
-        <button
-          className={button.primary}
-          disabled={busy}
-          onClick={() => approveRest.mutate(trimmedOrUndefined(comment))}
-        >
-          Approve — finish all remaining
-        </button>
-        <button
-          className={button.secondary}
-          disabled={busy || comment.trim() === ''}
-          onClick={() => revise.mutate(comment.trim())}
-        >
-          Request revision
-        </button>
-      </div>
+      </ReviewBar>
     </section>
   )
 }

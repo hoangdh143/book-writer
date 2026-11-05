@@ -35,8 +35,8 @@ const SavedCopyPanel = ({
   onRetry?: () => void
   cached: Book
 }) => (
-  <section className="flex flex-col gap-4">
-    <ErrorPanel title={title} message={message} error={error} onBack={onBack} onRetry={onRetry} />
+  <section className="flex flex-col gap-6">
+    <ErrorPanel tone="notice" title={title} message={message} error={error} onBack={onBack} onRetry={onRetry} />
     <BookView book={cached} />
   </section>
 )
@@ -52,7 +52,7 @@ export const BookDetail = ({ id }: { id: string }) => {
     if (book !== undefined && book.status === 'completed') saveCompleted(book)
   }, [query.data, saveCompleted])
 
-  if (query.isPending) return <p className="text-sm text-slate-500">Loading book…</p>
+  if (query.isPending) return <p className="text-sm text-slate-400">Loading book…</p>
 
   if (query.isError) {
     const notFound = query.error instanceof ApiError && query.error.status === 404
@@ -64,7 +64,7 @@ export const BookDetail = ({ id }: { id: string }) => {
       return (
         <SavedCopyPanel
           title="Not on the server — showing your saved copy"
-          message="This book is no longer on the server (it was generated before session persistence, or deleted there). The completed copy below was saved in your browser, so downloads keep working."
+          message="This book is no longer on the server. The completed copy below is saved in this browser, so you can still read and download it."
           error={query.error}
           onBack={back}
           cached={cached}
@@ -78,7 +78,7 @@ export const BookDetail = ({ id }: { id: string }) => {
       return (
         <SavedCopyPanel
           title="Reconnecting — showing your saved copy"
-          message="The server is unreachable. The completed book below was saved in your browser, so downloads keep working."
+          message="The server is unreachable. The completed copy below is saved in this browser, so you can still read and download it."
           error={query.error}
           onBack={back}
           onRetry={retry}

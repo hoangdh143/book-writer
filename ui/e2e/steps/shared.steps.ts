@@ -57,6 +57,25 @@ Given('a completed book is open', async ({ page, world }) => {
   await openFromList(page, titleOf(completedBook))
 })
 
+Given('a book with unsafe chapter text is open', async ({ page, world }) => {
+  world.listItem = listItemFor(chapterReviewBook)
+  world.detailQueue = [chapterReviewBook]
+  world.chapterText = {
+    number: 2,
+    title: 'Unsafe',
+    text: '**Bold claim** and $E = mc^2$.\n\n<img src=x onerror="window.__xss=1"><script>window.__xss=1</script>',
+  }
+  await mockBookApi(page, world)
+  await mockChapterActions(page, world)
+  await openFromList(page, titleOf(chapterReviewBook))
+})
+
+Given('the book API lists a completed book', async ({ page, world }) => {
+  world.listItem = listItemFor(completedBook)
+  world.detailQueue = [completedBook]
+  await page.reload()
+})
+
 Given('the book detail endpoint fails', async ({ page, world }) => {
   world.listItem = listItemFor(planningBook)
   world.detailStatus = 500
@@ -92,12 +111,17 @@ When('the user writes the idea {string}', async ({ page }, idea) => {
 
 When('the user sets chapters to {int} and words per chapter to {int}', async ({ page }, chapters, words) => {
   await page.getByLabel('Chapters').fill(String(chapters))
-  await page.getByLabel('Words / chapter').fill(String(words))
+  await page.getByLabel('Words per chapter').fill(String(words))
 })
 
 When('the user selects the model {string}', async ({ page }, label) => {
   await page.getByLabel('Model', { exact: true }).click()
   await page.getByRole('option', { name: label }).click()
+})
+
+When('the user opens the completed book', async ({ page }) => {
+  await page.getByRole('button', { name: titleOf(completedBook) }).click()
+  await expect(page.getByText('Book complete')).toBeVisible()
 })
 
 When('the user opens settings', async ({ page }) => {
@@ -106,6 +130,14 @@ When('the user opens settings', async ({ page }) => {
 
 When('the user saves the OpenRouter API key {string}', async ({ page }, key) => {
   await page.getByLabel('OpenRouter API key').fill(key)
+})
+
+When('the user clicks inside the settings dialog', async ({ page }) => {
+  await page.getByRole('dialog', { name: 'Settings' }).click({ position: { x: 4, y: 4 } })
+})
+
+When('the user presses Escape', async ({ page }) => {
+  await page.keyboard.press('Escape')
 })
 
 When('the user clicks {string}', async ({ page }, name) => {
@@ -117,7 +149,7 @@ When('the user sets the outline title to {string}', async ({ page }, title) => {
 })
 
 When('the user writes the review comment {string}', async ({ page }, comment) => {
-  await page.getByLabel(/Comment \(/).fill(comment)
+  await page.getByLabel(/Feedback \(/).fill(comment)
 })
 
 When('a book is selected', async ({ page }) => {
@@ -263,6 +295,36 @@ Then('the file does not contain {string}', async ({ world }, fragment) => {
   expect(await readFile(path, 'utf8')).not.toContain(fragment)
 })
 
+Then('the page explains {string}', async ({ page }, fragment) => {
+  await expect(page.getByText(fragment)).toBeVisible()
+})
+
+Then('the chapter shows bold text {string} and rendered math', async ({ page }, text) => {
+  await expect(page.locator('.manuscript strong')).toHaveText(text)
+  await expect(page.locator('.manuscript .katex').first()).toBeVisible()
+})
+
+Then('the chapter contains no injected markup', async ({ page }) => {
+  await expect(page.locator('.manuscript img, .manuscript script')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined()
+})
+
+Then('the idea still reads {string}', async ({ page }, idea) => {
+  await expect(page.getByLabel('Book idea')).toHaveValue(idea)
+})
+
+Then('the settings dialog is open', async ({ page }) => {
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+})
+
+Then('the settings dialog is closed', async ({ page }) => {
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden()
+})
+
+Then('the book list is empty', async ({ page }) => {
+  await expect(page.getByText('No books yet.')).toBeVisible()
+})
+
 Then('the error panel {string} is visible', async ({ page }, title) => {
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
 })
@@ -272,7 +334,7 @@ Then('the book renders normally', async ({ page }) => {
 })
 
 Then('the empty state is visible', async ({ page }) => {
-  await expect(page.getByText('Create a book to start the pipeline.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'New book' })).toBeVisible()
 })
 
 Then('the fallback shows {string}', async ({ page }, text) => {

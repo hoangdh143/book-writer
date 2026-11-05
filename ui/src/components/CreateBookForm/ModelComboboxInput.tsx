@@ -33,7 +33,7 @@ export const ModelComboboxInput = ({
       aria-autocomplete="list"
       aria-activedescendant={open ? optionId(highlight) : undefined}
       autoComplete="off"
-      className={input}
+      className={`${input} font-normal`}
       value={open ? query : selectedLabel}
       placeholder="Search models…"
       onChange={(event) => onSearch(event.target.value)}

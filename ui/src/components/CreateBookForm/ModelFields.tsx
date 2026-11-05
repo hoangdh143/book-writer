@@ -12,24 +12,24 @@ interface Props {
 }
 
 export const ModelFields = ({ values, errors, onPatch }: Props) => (
-  <>
+  <div className="flex flex-col gap-3">
     <ModelSelect modelId={values.modelId} onSelect={(modelId) => onPatch({ modelId })} />
     <ModelToolsWarning modelId={values.modelId} />
     {isCustomChoice(values.modelId) ? (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <label className={fieldLabel}>
           Custom model id
           <input
-            className={input}
+            className={`${input} font-normal`}
             value={values.customModel}
             placeholder="e.g. qwen/qwen-2.5-72b-instruct"
             onChange={(event) => onPatch({ customModel: event.target.value })}
           />
         </label>
         <label className={fieldLabel}>
-          Base URL <span className="text-slate-500">(optional)</span>
+          Base URL (optional)
           <input
-            className={input}
+            className={`${input} font-normal`}
             value={values.customBaseUrl}
             placeholder="OpenAI-compatible chat-completions URL"
             onChange={(event) => onPatch({ customBaseUrl: event.target.value })}
@@ -38,5 +38,5 @@ export const ModelFields = ({ values, errors, onPatch }: Props) => (
         <FieldError message={errors.customModel ?? errors.customBaseUrl} />
       </div>
     ) : null}
-  </>
+  </div>
 )

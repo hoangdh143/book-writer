@@ -1,5 +1,6 @@
 target/
 output/
+.env
 .idea/
 *.iml
 .vscode/
@@ -13,3 +14,5 @@ ui/dist/
 ui/.features-gen/
 ui/test-results/
 ui/playwright-report/
+app.log
+app.err.log

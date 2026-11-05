@@ -1,7 +1,84 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-sky-400;
+  }
+
+  button:not(:disabled),
+  summary,
+  select {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .manuscript {
+    @apply font-serif text-[1.0625rem] leading-[1.75] text-slate-200;
+    overflow-wrap: break-word;
+
+    & > * + * {
+      @apply mt-4;
+    }
+
+    & h1 {
+      @apply mt-8 mb-10 text-center text-3xl font-semibold text-slate-50;
+    }
+
+    & h2 {
+      @apply mt-12 mb-4 text-2xl font-semibold text-slate-50;
+    }
+
+    & h3 {
+      @apply mt-8 mb-3 text-xl font-semibold text-slate-100;
+    }
+
+    & > :first-child {
+      @apply mt-0;
+    }
+
+    & blockquote {
+      @apply border-l-2 border-slate-600 pl-4 text-slate-300 italic;
+    }
+
+    & ul {
+      @apply list-disc pl-6;
+    }
+
+    & ol {
+      @apply list-decimal pl-6;
+    }
+
+    & a {
+      @apply text-sky-300 underline;
+    }
+
+    & hr {
+      @apply my-8 border-slate-700;
+    }
+
+    & code {
+      @apply rounded bg-slate-800 px-1 py-0.5 font-mono text-sm;
+    }
+
+    & pre {
+      @apply overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-sm;
+    }
+
+    & pre code {
+      @apply bg-transparent p-0;
+    }
+
+    & .katex-display {
+      @apply overflow-x-auto overflow-y-hidden py-1;
+    }
   }
 }

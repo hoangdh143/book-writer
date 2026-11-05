@@ -17,6 +17,25 @@ Feature: Create a new book
     And the user clicks "Create book"
     Then the create request has model "qwen2.5-7b-instruct" and base url "http://localhost:1234/v1/chat/completions"
 
+  Scenario: A half-written idea survives a look at another book
+    Given the book API lists a completed book
+    When the user writes the idea "A heist on a floating city"
+    And the user opens the completed book
+    And the user clicks "New book"
+    Then the idea still reads "A heist on a floating city"
+
+  Scenario: A missing saved key points to settings
+    When the user selects the model "Llama 3.3 70B Instruct"
+    And the user clicks "Add one"
+    Then the settings dialog is open
+
+  Scenario: The settings dialog only closes on purpose
+    When the user opens settings
+    And the user clicks inside the settings dialog
+    Then the settings dialog is open
+    When the user presses Escape
+    Then the settings dialog is closed
+
   Scenario: A custom model requires a model id
     When the user selects the model "Custom model…"
     And the user clicks "Create book"

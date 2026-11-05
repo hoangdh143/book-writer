@@ -10,8 +10,8 @@ import {
 } from '../../domain/tocEdits'
 import type { ChapterPatch, DraftOutline, OutlinePatch } from '../../domain/tocEdits'
 import { trimmedOrUndefined } from '../../domain/text'
-import { actionRow, button, panel } from '../../domain/uiClasses'
-import { CommentBox } from '../CommentBox'
+import { button, hint, sectionHeading } from '../../domain/uiClasses'
+import { ReviewBar } from '../ReviewBar'
 import { OutlineFields } from './OutlineFields'
 import { ChapterPlanList } from './ChapterPlanList'
 
@@ -41,43 +41,40 @@ export const TocReviewView = ({ book, outline }: Props) => {
     setDraft((d) => patchChapter(d, number, patch))
 
   return (
-    <section className={`${panel} flex flex-col`}>
-      <h2 className="text-base font-semibold text-slate-100">Review the table of contents</h2>
-      <p className="mt-0.5 text-sm text-slate-500">
-        Adjust anything below, add a comment, then approve — or send it back for revision.
-      </p>
-      <div className="mt-3 flex flex-col gap-3">
+    <section className="flex flex-col">
+      <h3 className={sectionHeading}>Review the outline</h3>
+      <p className={`${hint} mt-1 mb-5`}>Click any text to edit it, then approve when it looks right.</p>
+      <div className="flex flex-col gap-5">
         <OutlineFields draft={draft} onPatch={onPatchOutline} />
         <ChapterPlanList draft={draft} onPatch={onPatchChapter} />
-        <CommentBox
-          label="Comment (optional for approval, required for revision)"
-          value={comment}
-          onChange={setComment}
-        />
-        <div className={actionRow}>
-          <button
-            className={button.primary}
-            disabled={busy}
-            onClick={() => approve.mutate({ mode: 'all', comment: trimmedOrUndefined(comment), edits })}
-          >
-            Approve — all chapters
-          </button>
-          <button
-            className={button.primary}
-            disabled={busy}
-            onClick={() => approve.mutate({ mode: 'step', comment: trimmedOrUndefined(comment), edits })}
-          >
-            Approve — step by step
-          </button>
-          <button
-            className={button.secondary}
-            disabled={busy || comment.trim() === ''}
-            onClick={() => revise.mutate(comment.trim())}
-          >
-            Request revision
-          </button>
-        </div>
       </div>
+      <ReviewBar
+        comment={comment}
+        onComment={setComment}
+        note={edits === undefined ? undefined : 'Requesting a revision sends only your feedback and discards the edits above.'}
+      >
+        <button
+          className={button.quiet}
+          disabled={busy || comment.trim() === ''}
+          onClick={() => revise.mutate(comment.trim())}
+        >
+          Request revision
+        </button>
+        <button
+          className={button.secondary}
+          disabled={busy}
+          onClick={() => approve.mutate({ mode: 'all', comment: trimmedOrUndefined(comment), edits })}
+        >
+          Approve and write all chapters
+        </button>
+        <button
+          className={button.primary}
+          disabled={busy}
+          onClick={() => approve.mutate({ mode: 'step', comment: trimmedOrUndefined(comment), edits })}
+        >
+          Approve and review each chapter
+        </button>
+      </ReviewBar>
     </section>
   )
 }

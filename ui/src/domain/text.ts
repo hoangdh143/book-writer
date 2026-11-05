@@ -8,8 +8,11 @@ export const timeLabel = (iso: string): string => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleTimeString()
 }
 
-export const durationLabel = (seconds: number): string =>
-  `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+export const durationLabel = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m ${seconds % 60}s`
+}
 
 export const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : 'Something went wrong'

@@ -3,7 +3,7 @@ Feature: TOC review gate
     Given a book waiting for TOC review is open
     When the user sets the outline title to "The Floating Heist"
     And the user writes the review comment "Tighten chapter two"
-    And the user clicks "Approve — all chapters"
+    And the user clicks "Approve and write all chapters"
     Then the TOC approve request has mode "all", comment "Tighten chapter two" and title "The Floating Heist"
     And the book enters generation
 
@@ -14,3 +14,8 @@ Feature: TOC review gate
     And the user clicks "Request revision"
     Then the TOC revise request has comment "Add a heist chapter"
     And a fresh outline arrives
+
+  Scenario: Editing the outline warns that a revision discards the edits
+    Given a book waiting for TOC review is open
+    When the user sets the outline title to "The Floating Heist"
+    Then the page explains "discards the edits"

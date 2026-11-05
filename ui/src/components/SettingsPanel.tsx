@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { button, fieldLabel, input, panel } from '../domain/uiClasses'
+import { useEffect, useRef } from 'react'
+import { button, fieldLabel, hint, input, sectionHeading } from '../domain/uiClasses'
 import { providerLabels } from '../domain/models'
 import { keyProviders, useSettingsStore } from '../store/settingsStore'
 
@@ -11,32 +11,28 @@ export const SettingsPanel = ({ onClose }: Props) => {
   const apiKeys = useSettingsStore((state) => state.apiKeys)
   const setApiKey = useSettingsStore((state) => state.setApiKey)
   const clearApiKeys = useSettingsStore((state) => state.clearApiKeys)
+  const dialog = useRef<HTMLDialogElement>(null)
+  const noKeys = keyProviders.every((provider) => apiKeys[provider] === '')
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    if (dialog.current?.open === false) dialog.current.showModal()
+  }, [])
 
   return (
-    <div
-      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4"
-      onClick={onClose}
+    <dialog
+      ref={dialog}
+      aria-label="Settings"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/70"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialog.current) onClose()
+      }}
     >
-      <div
-        role="dialog"
-        aria-label="Settings"
-        className={`${panel} w-full max-w-md`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Settings
-        </h2>
-        <p className="mb-3 text-xs text-slate-500">
-          API keys are stored only in this browser (localStorage) and sent with book-creation
-          requests when the form key is left empty. LM Studio needs no key.
+      <div className="p-6">
+        <h2 className={sectionHeading}>Settings</h2>
+        <p className={`${hint} mt-1 mb-4`}>
+          API keys stay in this browser and are sent with each new book. Without one, the server’s
+          environment key is used. LM Studio needs no key.
         </p>
         <div className="flex flex-col gap-3">
           {keyProviders.map((provider) => (
@@ -44,23 +40,23 @@ export const SettingsPanel = ({ onClose }: Props) => {
               {providerLabels[provider]} API key
               <input
                 type="password"
+                autoComplete="off"
                 className={input}
                 value={apiKeys[provider]}
-                placeholder="saved locally on change"
                 onChange={(event) => setApiKey(provider, event.target.value)}
               />
             </label>
           ))}
         </div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button className={button.danger} onClick={clearApiKeys}>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button className={button.quiet} disabled={noKeys} onClick={clearApiKeys}>
             Clear saved keys
           </button>
           <button className={button.primary} onClick={onClose}>
-            Close
+            Done
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }

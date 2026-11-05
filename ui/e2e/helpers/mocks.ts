@@ -35,6 +35,11 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
   })
 
   await page.route('**/api/books/b1', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      world.listItem = undefined
+      await json(route, { ok: true })
+      return
+    }
     if (world.offline) {
       await route.abort()
       return

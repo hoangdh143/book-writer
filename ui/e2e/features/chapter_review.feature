@@ -8,7 +8,7 @@ Feature: Chapter review gate
 
   Scenario: Approving the rest finishes all remaining chapters
     Given a book with chapter 2 awaiting review is open
-    When the user clicks "Approve — finish all remaining"
+    When the user clicks "Approve and write the rest"
     Then the approve-rest request has no comment
     And the book enters generation
 
@@ -18,3 +18,8 @@ Feature: Chapter review gate
     And the user clicks "Request revision"
     Then the chapter revise request has comment "More storm scenes"
     And the chapter text becomes "Storm-tossed rewrite of chapter two."
+
+  Scenario: Chapter text is rendered as sanitised markdown
+    Given a book with unsafe chapter text is open
+    Then the chapter shows bold text "Bold claim" and rendered math
+    And the chapter contains no injected markup

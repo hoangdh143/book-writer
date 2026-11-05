@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 export interface MathPiece {
@@ -91,4 +92,13 @@ export const markdownToXmlHtml = async (markdown: string): Promise<string> => {
   const { text, pieces } = extractMath(markdown)
   const safe = toXmlSafeHtml(marked.parse(text, { async: false }))
   return renderMath(safe, pieces)
+}
+
+const unsafeReadingTags = ['img', 'picture', 'source', 'video', 'audio', 'style', 'form', 'input', 'button', 'textarea', 'select']
+
+/** Markdown → HTML for on-screen reading. Book text is model output, so it is sanitised and cannot load remote resources. */
+export const markdownToSafeHtml = async (markdown: string): Promise<string> => {
+  const { text, pieces } = extractMath(markdown)
+  const html = await renderMath(marked.parse(text, { async: false }), pieces)
+  return DOMPurify.sanitize(html, { FORBID_TAGS: unsafeReadingTags })
 }

@@ -8,9 +8,9 @@ export const ModelToolsWarning = ({ modelId }: { readonly modelId: string }) => 
   const selected = options.find((option) => option.id === modelId)
   if (selected?.supportsTools !== false) return null
   return (
-    <p className="text-xs text-amber-400">
-      This model does not support tool use — the book pipeline needs it, and OpenRouter may return
-      “No endpoints found that support tool use”. Pick a model without the “no tools” badge.
+    <p className="text-sm text-amber-300">
+      This model doesn’t support tool use, which the book pipeline needs, so it will likely fail.
+      Pick a model without the “no tools” badge.
     </p>
   )
 }

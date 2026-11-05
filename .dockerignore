@@ -1,0 +1,13 @@
+# Allowlist: output/ holds session.json files with API keys and must never reach an image.
+*
+!build.sbt
+!project/build.properties
+!src
+!ui
+
+ui/node_modules
+ui/dist
+ui/e2e
+ui/.features-gen
+ui/test-results
+ui/playwright-report

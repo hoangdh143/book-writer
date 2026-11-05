@@ -1,27 +1,32 @@
-import { useState } from 'react'
 import { button } from '../domain/uiClasses'
+import { useUiStore } from '../store/uiStore'
 import { BookPanel } from './BookPanel'
 import { BookList } from './BookList'
-import { CreateBookForm } from './CreateBookForm/CreateBookForm'
 import { SettingsPanel } from './SettingsPanel'
 
 export const App = () => {
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsOpen = useUiStore((state) => state.settingsOpen)
+  const setSettingsOpen = useUiStore((state) => state.setSettingsOpen)
+  const selectBook = useUiStore((state) => state.selectBook)
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 lg:flex-row lg:p-6">
-      <aside className="flex w-full shrink-0 flex-col gap-5 lg:w-96">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold tracking-wide text-sky-400">book-writer</h1>
-          <button className={button.secondary} onClick={() => setSettingsOpen(true)}>
+    <div className="lg:flex lg:min-h-screen">
+      <aside className="flex shrink-0 flex-col gap-4 border-b border-slate-800 bg-slate-900/40 p-4 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-r lg:border-b-0">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-base font-semibold text-slate-50">Book Writer</h1>
+          <button className={button.quiet} onClick={() => setSettingsOpen(true)}>
             Settings
           </button>
         </div>
-        <CreateBookForm />
+        <button className={button.primary} onClick={() => selectBook(null)}>
+          New book
+        </button>
         <BookList />
       </aside>
-      <main className="min-w-0 flex-1">
-        <BookPanel />
+      <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-10">
+        <div className="mx-auto max-w-3xl">
+          <BookPanel />
+        </div>
       </main>
       {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
     </div>

@@ -9,3 +9,12 @@ export const generatingNote = (book: Book): string => {
     ? `Writing ${book.totalChapters} chapters…`
     : `Writing chapter ${current} of ${book.totalChapters}…`
 }
+
+const chapterStateLabels: Readonly<Record<string, string>> = {
+  pending: 'Queued',
+  writing: 'Writing…',
+  written: 'Written',
+  awaiting_review: 'Ready for review',
+}
+
+export const chapterStateLabel = (state: string): string => chapterStateLabels[state] ?? state
