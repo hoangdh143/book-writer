@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, ChapterDraft, ChapterPlan, Config, EditorSink, OutlineSink, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, EditorSink, Finding, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -40,7 +40,7 @@ object BookSession {
       events = persisted.events.map { case (atMs, message) => (Instant.ofEpochMilli(atMs), message) },
       startedAt = Instant.ofEpochMilli(persisted.startedAtMs)
     ).flatMap { session =>
-      session.log("Session restored from disk") *> session.resume().as(session)
+      session.setReferences(persisted.references) *> session.log("Session restored from disk") *> session.resume().as(session)
     }
 
   private def build(
@@ -55,9 +55,12 @@ object BookSession {
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
       graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink)
-      (app, architect, writer, editor) = graph
+      (app, architect, writer, editor, scholar) = graph
       stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
+      refsRef     <- Ref.make[List[Reference]](Nil)
+      findingsRef <- Ref.make[List[Finding]](Nil)
+      reviewRef   <- Ref.make[Option[ReviewReport]](None)
     } yield {
       val session = new BookSession(
         id = id,
@@ -66,10 +69,14 @@ object BookSession {
         architect = architect,
         writer = writer,
         editor = editor,
+        scholar = scholar,
         outlineSink = outlineSink,
         editorSink = editorSink,
         stateRef = stateRef,
         fiberRef = fiberRef,
+        refsRef = refsRef,
+        findingsRef = findingsRef,
+        reviewRef = reviewRef,
         startedAt = startedAt
       )
       app.getExecutor.addEventHook(session.eventHook)
@@ -84,10 +91,14 @@ final class BookSession private[web] (
   architect: AgentNode,
   writer: AgentNode,
   editor: AgentNode,
+  scholar: Option[ScholarGraph],
   outlineSink: OutlineSink,
   editorSink: EditorSink,
   stateRef: Ref[SessionView],
   fiberRef: Ref[Option[Fiber[Nothing, Unit]]],
+  refsRef: Ref[List[Reference]],
+  findingsRef: Ref[List[Finding]],
+  reviewRef: Ref[Option[ReviewReport]],
   startedAt: Instant
 ) {
 
@@ -142,6 +153,7 @@ final class BookSession private[web] (
 
   private def afterToc(outcome: TocOutcome): ZIO[Any, Throwable, Unit] =
     for {
+      _       <- if (cfg.scholar) bibliographyStage(outcome.outline) else ZIO.unit
       written <- chapterLoop(outcome.outline, Nil, outcome.outline.chapters, outcome.mode, outcome.notes)
       front   <- editStage(outcome.outline, written)
       _       <- finish(outcome.outline, written, front._1, front._2)
@@ -261,10 +273,12 @@ final class BookSession private[web] (
         val prevEnding = done.lastOption.map(_.endingExcerpt())
         for {
           _     <- setPhase(BookPhase.Generating(outline, done, plan, rest, mode, notes))
-          draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, None)
+          refs  <- refsRef.get
+          draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, None, refs)
           wc     = WrittenChapter(plan, draft.text)
           _     <- attachContinuity(draft)
-          next  <- nextAfterWrite(outline, done, wc, rest, mode, notes)
+          refined <- scholarRefine(outline, wc)
+          next  <- nextAfterWrite(outline, done, refined, rest, mode, notes)
         } yield next
     }
 
@@ -311,15 +325,84 @@ final class BookSession private[web] (
     val idx = wc.plan.number - 1
     val prevEnding = done.lastOption.map(_.endingExcerpt())
     for {
-      draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, Some(comment))
+      refs  <- refsRef.get
+      draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, Some(comment), refs)
       wc2    = WrittenChapter(wc.plan, draft.text)
       next  <- reviewGate(outline, done, wc2, remaining, notes)
     } yield next
   }
 
+  // ---- scholar stages ---------------------------------------------------------
+
+  def setReferences(refs: List[Reference]): UIO[Unit] = refsRef.set(refs)
+
+  /** Stage S1: the Bibliographer compiles the reference list right after TOC approval. */
+  private def bibliographyStage(outline: BookOutline): UIO[Unit] =
+    scholar match {
+      case None => ZIO.unit
+      case Some(sg) =>
+        log("Compiling the bibliography") *>
+          Stages.bibliography(app, sg.bibliographer, sg.refSink, outline, cfg)
+            .flatMap { refs =>
+              refsRef.set(refs) *> persist *> log(s"Bibliography complete: ${refs.size} references")
+            }
+            .catchAll(e => log(s"Bibliography failed (${clip(e.getMessage, 80)}); continuing without references"))
+    }
+
+  /** Stage S2: per-section fact cross-check with one automatic repair round when the
+    * FactChecker flags major problems. Accumulates findings for the final report. */
+  private def scholarRefine(outline: BookOutline, wc: WrittenChapter): ZIO[Any, Throwable, WrittenChapter] =
+    scholar match {
+      case None => ZIO.succeed(wc)
+      case Some(sg) =>
+        refsRef.get.flatMap { refs =>
+          findingsRef.update(_.filterNot(_.section == wc.plan.number)) *>
+            log(s"Fact-checking section ${wc.plan.number}") *>
+            Stages.factCheck(app, sg.factChecker, sg.factSink, outline, wc, refs).flatMap { findings =>
+              val problems = findings.filter(f => f.isMajor || f.verdict == "contradicted" || f.verdict == "unsupported")
+              if (problems.isEmpty)
+                findingsRef.update(_ ++ findings).as(wc)
+              else
+                Briefs.factCheckRevision(findings) match {
+                  case None => findingsRef.update(_ ++ findings).as(wc)
+                  case Some(revision) =>
+                    log(s"Fact-check found ${problems.size} problem(s); repairing section ${wc.plan.number}") *>
+                      Stages.writeChapter(app, writer, cfg, outline, wc.plan.number - 1, None, Nil, Some(revision), refs)
+                        .flatMap { draft =>
+                          val repaired = WrittenChapter(wc.plan, draft.text)
+                          Stages.factCheck(app, sg.factChecker, sg.factSink, outline, repaired, refs)
+                            .flatMap { recheck =>
+                              findingsRef.update(_ ++ recheck).as(repaired)
+                            }
+                        }
+                }
+            }
+        }.catchAll { e =>
+          log(s"Fact-check failed for section ${wc.plan.number} (${clip(e.getMessage, 80)}); keeping draft") *>
+            ZIO.succeed(wc)
+        }
+    }
+
+  /** Stage S3: the PeerReviewer reviews the finished paper (in place of the book editor). */
+  private def reviewStage(outline: BookOutline, written: List[WrittenChapter]): UIO[Unit] =
+    scholar match {
+      case None => ZIO.unit
+      case Some(sg) =>
+        refsRef.get.flatMap { refs =>
+          log("Peer review") *>
+            Stages.peerReview(app, sg.reviewer, sg.reviewSink, outline, written, refs)
+              .flatMap { report =>
+                reviewRef.set(report) *>
+                  log(report.fold("Peer review failed; continuing without review report")(
+                    r => s"Review verdict: ${r.verdict} (score ${r.score}/10, ${r.issues.size} issue(s))"))
+              }
+        }.catchAll(_ => ZIO.unit)
+    }
+
   private def editStage(outline: BookOutline, written: List[WrittenChapter]): UIO[(String, String)] =
     setPhase(BookPhase.Editing(outline, written)) *>
-      (if (cfg.skipEditor) ZIO.succeed(("", ""))
+      (if (cfg.scholar) reviewStage(outline, written).as(("", ""))
+       else if (cfg.skipEditor) ZIO.succeed(("", ""))
        else
          log("Writing foreword and blurb") *>
            Stages.edit(app, editor, editorSink, outline, written, cfg).catchAll { e =>
@@ -328,12 +411,20 @@ final class BookSession private[web] (
 
   private def finish(outline: BookOutline, written: List[WrittenChapter], foreword: String, blurb: String): UIO[Unit] = {
     val elapsed = Duration.ofSeconds(Duration.between(startedAt, Instant.now()).getSeconds)
-    val md = Assembler.markdown(outline, written, foreword, blurb, cfg, elapsed)
     for {
-      files <- ZIO.attempt(Assembler.save(cfg, md, outline, written)).orElseSucceed(Nil)
+      refs     <- refsRef.get
+      findings <- findingsRef.get
+      review   <- reviewRef.get
+      md        =
+        if (cfg.scholar) Assembler.scholarMarkdown(outline, written, refs, findings, review, cfg, elapsed)
+        else Assembler.markdown(outline, written, foreword, blurb, cfg, elapsed)
+      files <- ZIO.attempt(
+        if (cfg.scholar) Assembler.save(cfg, md, outline, written, refs, findings, review)
+        else Assembler.save(cfg, md, outline, written)
+      ).orElseSucceed(Nil)
       paths  = files.map(_.toString)
       _     <- setPhase(BookPhase.Completed(outline, written, md, paths, elapsed.getSeconds))
-      _     <- log(s"Book complete: ${outline.title} (${written.map(_.wordCount).sum} words)")
+      _     <- log(s"${if (cfg.scholar) "Paper" else "Book"} complete: ${outline.title} (${written.map(_.wordCount).sum} words)")
     } yield ()
   }
 
@@ -350,8 +441,10 @@ final class BookSession private[web] (
   /** Checkpoints the session to disk (output/books/<id>/session.json) so the book
     * list, chapters and review gates survive server restarts. */
   def persist: UIO[Unit] =
-    stateRef.get.flatMap { v =>
-      SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt))
+    refsRef.get.flatMap { refs =>
+      stateRef.get.flatMap { v =>
+        SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt, refs))
+      }
     }
 
   private def log(message: String): UIO[Unit] =

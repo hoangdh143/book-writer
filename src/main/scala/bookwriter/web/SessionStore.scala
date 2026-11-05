@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{BookOutline, ChapterPlan, Config, WrittenChapter}
+import bookwriter.{BookOutline, ChapterPlan, Config, Reference, WrittenChapter}
 import zio.UIO
 import zio.json.JsonCodec
 import zio.json._
@@ -18,7 +18,8 @@ final case class PersistedConfig(
   apiKey: String,
   baseUrl: String,
   temperature: Double,
-  skipEditor: Boolean
+  skipEditor: Boolean,
+  scholar: Boolean = false
 ) derives JsonCodec {
 
   def toConfig(id: String): Config = Config(
@@ -32,6 +33,7 @@ final case class PersistedConfig(
     baseUrl = baseUrl,
     temperature = temperature,
     skipEditor = skipEditor,
+    scholar = scholar,
     serve = true
   )
 }
@@ -72,7 +74,8 @@ final case class PersistedSession(
   cfg: PersistedConfig,
   phase: PersistedPhase,
   events: List[(Long, String)],
-  startedAtMs: Long
+  startedAtMs: Long,
+  references: List[Reference] = Nil
 ) derives JsonCodec
 
 object SessionStore:
@@ -86,7 +89,8 @@ object SessionStore:
     cfg: Config,
     phase: BookPhase,
     events: List[(Instant, String)],
-    startedAt: Instant
+    startedAt: Instant,
+    references: List[Reference]
   ): PersistedSession =
     val persistedCfg = PersistedConfig(
       prompt = cfg.prompt,
@@ -97,7 +101,8 @@ object SessionStore:
       apiKey = cfg.apiKey,
       baseUrl = cfg.baseUrl,
       temperature = cfg.temperature,
-      skipEditor = cfg.skipEditor
+      skipEditor = cfg.skipEditor,
+      scholar = cfg.scholar
     )
     PersistedSession(
       version = 1,
@@ -105,7 +110,8 @@ object SessionStore:
       cfg = persistedCfg,
       phase = toPersisted(phase),
       events = events.map { case (at, msg) => (at.toEpochMilli, msg) },
-      startedAtMs = startedAt.toEpochMilli
+      startedAtMs = startedAt.toEpochMilli,
+      references = references
     )
 
   def toPersisted(phase: BookPhase): PersistedPhase = phase match

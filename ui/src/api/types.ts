@@ -31,6 +31,7 @@ const bookSchema = z.object({
   prompt: z.string(),
   model: z.string(),
   status: z.string(),
+  scholar: z.boolean().nullish(),
   writtenCount: z.number().int(),
   totalChapters: z.number().int(),
   outline: outlineSchema.nullish(),
@@ -49,6 +50,7 @@ const bookListItemSchema = z.object({
   prompt: z.string(),
   status: z.string(),
   title: z.string().nullish(),
+  scholar: z.boolean().nullish(),
   writtenCount: z.number().int().default(0),
   totalChapters: z.number().int().default(0),
 })

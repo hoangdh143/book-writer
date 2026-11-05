@@ -6,6 +6,11 @@ object Briefs {
     if (notes.isEmpty) "" else
       s"\n\nAUTHOR'S NOTES — the author asked that every chapter honor these directions:\n${notes.map(n => s"- $n").mkString("\n")}"
 
+  /** Numbered reference list shown to the scholar writer with every assignment. */
+  private def referencesBlock(refs: List[Reference]): String =
+    if (refs.isEmpty) "" else
+      s"\n\nREFERENCE LIST (cite ONLY these, by bracketed number):\n${refs.map(_.format).mkString("\n")}"
+
   /** Everything up to (and excluding) the final "write now" instruction. */
   private def chapterBody(
     outline: BookOutline,
@@ -14,7 +19,8 @@ object Briefs {
     cfg: Config,
     notes: List[String],
     revision: Option[String],
-    withClosing: Boolean
+    withClosing: Boolean,
+    refs: List[Reference] = Nil
   ): String = {
     val plan = outline.chapters
     val ch = plan(idx)
@@ -41,7 +47,7 @@ FULL CHAPTER PLAN:
 $toc
 
 YOUR ASSIGNMENT — write Chapter ${ch.number}: "${ch.title}" in full.
-Chapter synopsis: ${ch.synopsis}$prev$ending$opening$closing${authorNotesBlock(notes)}$rewrite"""
+Chapter synopsis: ${ch.synopsis}$prev$ending$opening$closing${authorNotesBlock(notes)}$rewrite${referencesBlock(refs)}"""
   }
 
   def editorInput(outline: BookOutline, chapters: List[WrittenChapter], cfg: Config): String = {
@@ -72,9 +78,10 @@ $manuscript"""
     prevEnding: Option[String],
     cfg: Config,
     notes: List[String] = Nil,
-    revision: Option[String] = None
+    revision: Option[String] = None,
+    refs: List[Reference] = Nil
   ): String =
-    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = true) +
+    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = true, refs = refs) +
       s"""
 
 Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."""
@@ -87,9 +94,10 @@ Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."
     cfg: Config,
     notes: List[String],
     revision: Option[String],
-    totalParts: Int
+    totalParts: Int,
+    refs: List[Reference] = Nil
   ): String =
-    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = false) +
+    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = false, refs = refs) +
       s"""
 
 This chapter will be written in $totalParts consecutive parts, appended in order. You are writing Part 1 of
@@ -104,7 +112,8 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
     part: Int,
     totalParts: Int,
     cfg: Config,
-    notes: List[String] = Nil
+    notes: List[String] = Nil,
+    refs: List[Reference] = Nil
   ): String = {
     val ch = outline.chapters(idx)
     val tail = soFar.split("\\s+").filter(_.nonEmpty).takeRight(700).mkString(" ")
@@ -121,7 +130,7 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
 Premise: ${outline.premise}
 
 YOUR ASSIGNMENT — continue Chapter ${ch.number}: "${ch.title}" (Part $part of $totalParts).
-Chapter synopsis: ${ch.synopsis}${authorNotesBlock(notes)}$closing
+Chapter synopsis: ${ch.synopsis}${authorNotesBlock(notes)}$closing${referencesBlock(refs)}
 
 TEXT SO FAR (ends mid-chapter; continue EXACTLY from where it stops):
 \"\"\"
@@ -131,5 +140,82 @@ TEXT SO FAR (ends mid-chapter; continue EXACTLY from where it stops):
 Write ONLY the continuation now (markdown, about $partTarget more words toward the chapter's
 ${cfg.wordsPerChapter}-word target): pick up seamlessly where the text above stops. Do not repeat, restate or
 re-summarize anything already written."""
+  }
+
+  // ---- scholar briefs ---------------------------------------------------------
+
+  def bibliographerInput(outline: BookOutline, cfg: Config): String =
+    s"""Paper: "${outline.title}" (field: ${outline.genre})
+
+ABSTRACT:
+${outline.premise}
+
+SECTION PLAN:
+${outline.chapters.map(c => s"${c.number}. ${c.title} — ${c.synopsis}").mkString("\n")}
+
+Compile the reference list for this paper now."""
+
+  def factCheckInput(outline: BookOutline, wc: WrittenChapter, refs: List[Reference]): String =
+    s"""Paper: "${outline.title}" (field: ${outline.genre})
+Section to check: ${wc.plan.number}. ${wc.plan.title}
+
+REFERENCE LIST:
+${if (refs.isEmpty) "(no references recorded)" else refs.map(_.format).mkString("\n")}
+
+SECTION TEXT:
+\"\"\"
+${wc.text.trim}
+\"\"\"
+
+Cross-check every checkable claim in this section against the reference list now."""
+
+  /** Turns fact-check findings into a revision request for the section writer. */
+  def factCheckRevision(findings: List[Finding]): Option[String] = {
+    val problems = findings.filter(f => f.isMajor || f.verdict == "contradicted" || f.verdict == "unsupported")
+    if (problems.isEmpty) None
+    else Some {
+      val lines = problems.map { f =>
+        s"- [${f.severity}] Claim: \"${f.claim.take(300)}\" (cited: ${if (f.citations.isEmpty) "none" else f.citations}) — ${f.verdict}. Fix: ${f.note}"
+      }.mkString("\n")
+      s"""FACT-CHECK REPORT — the fact checker flagged these problems in the previous draft. Fix all of them:
+$lines
+Keep everything that was correct unchanged where possible; repair or remove the flagged claims and re-cite properly."""
+    }
+  }
+
+  def reviewerInput(outline: BookOutline, chapters: List[WrittenChapter], refs: List[Reference]): String = {
+    val totalWords = chapters.map(_.wordCount).sum
+    val body =
+      if (totalWords <= 30000)
+        chapters.map(c => s"## Section ${c.plan.number}: ${c.plan.title}\n\n${c.text}").mkString("\n\n---\n\n")
+      else
+        chapters.map { c =>
+          val head = c.text.split("\\s+").take(250).mkString(" ")
+          s"## Section ${c.plan.number}: ${c.plan.title}\n\n$head ..."
+        }.mkString("\n\n---\n\n")
+
+    s"""Paper: "${outline.title}" (field: ${outline.genre})
+
+ABSTRACT:
+${outline.premise}
+
+REFERENCE LIST:
+${if (refs.isEmpty) "(no references recorded)" else refs.map(_.format).mkString("\n")}
+
+FULL TEXT:
+$body
+
+Review this paper now."""
+  }
+
+  /** The revision request the writer sees when the peer reviewer demands changes to one section. */
+  def reviewRevision(issues: List[SectionIssue]): Option[String] = {
+    val withComments = issues.filter(_.comment.trim.nonEmpty)
+    if (withComments.isEmpty) None
+    else Some {
+      val lines = withComments.map(i => s"- [${i.severity}] ${i.comment}").mkString("\n")
+      s"""PEER REVIEW — the reviewer flagged these problems in this section. Fix all of them:
+$lines"""
+    }
   }
 }

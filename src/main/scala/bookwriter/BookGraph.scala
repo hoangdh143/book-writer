@@ -1,10 +1,21 @@
 package bookwriter
 
-import zio.UIO
+import zio.{UIO, ZIO}
 import loki.engine.app.{GraphApp, createAgent, createTool, createContext}
 import loki.engine.backend.OpenAIBackend
 import loki.engine.core.nodes.{AgentNode, ExecutionPolicy, RetryPolicy}
 import loki.engine.core.store.GraphStore
+
+/** The extra scholar-mode agents plus their tool-call sinks, present only when
+  * the run was started with scholar mode enabled. */
+final case class ScholarGraph(
+  bibliographer: AgentNode,
+  factChecker: AgentNode,
+  reviewer: AgentNode,
+  refSink: ReferenceSink,
+  factSink: FactCheckSink,
+  reviewSink: ReviewSink
+)
 
 object BookGraph {
 
@@ -12,6 +23,9 @@ object BookGraph {
   val RefChapter = "bookwriter.tools.record_chapter"
   val RefBlurb = "bookwriter.tools.record_blurb"
   val RefForeword = "bookwriter.tools.record_foreword"
+  val RefReference = "bookwriter.tools.record_reference"
+  val RefFinding = "bookwriter.tools.record_finding"
+  val RefReview = "bookwriter.tools.record_review"
 
   private val apiPolicy = ExecutionPolicy(
     retryPolicy = RetryPolicy(maxAttempts = 4, backoffSeconds = 2.0, backoffMultiplier = 2.0)
@@ -22,7 +36,7 @@ object BookGraph {
     cfg: Config,
     outlineSink: OutlineSink,
     editorSink: EditorSink
-  ): UIO[(GraphApp, AgentNode, AgentNode, AgentNode)] = {
+  ): UIO[(GraphApp, AgentNode, AgentNode, AgentNode, Option[ScholarGraph])] = {
     val backend = new OpenAIBackend(
       baseUrl = cfg.baseUrl,
       apiKey = cfg.apiKey,
@@ -36,19 +50,23 @@ object BookGraph {
     app.registerTool(RefBlurb, (input: Any) => editorSink.recordBlurb(input))
 
     val architect = createAgent(
-      name = "BookArchitect",
-      description = "Designs the book: title, genre, premise and the full chapter-by-chapter outline",
+      name = if (cfg.scholar) "ResearchArchitect" else "BookArchitect",
+      description =
+        if (cfg.scholar) "Designs the research paper: title, field, abstract and the full section-by-section outline"
+        else "Designs the book: title, genre, premise and the full chapter-by-chapter outline",
       model = cfg.model,
-      systemPrompt = Prompts.architect(cfg),
+      systemPrompt = Prompts.architectPrompt(cfg),
       maxIterations = 16,
       maxTokens = 4096
     ).copy(executionPolicy = apiPolicy)
 
     val writer = createAgent(
-      name = "ChapterWriter",
-      description = "Writes one full chapter of the book",
+      name = if (cfg.scholar) "SectionWriter" else "ChapterWriter",
+      description =
+        if (cfg.scholar) "Writes one section of the paper with inline citations from the reference list"
+        else "Writes one full chapter of the book",
       model = cfg.model,
-      systemPrompt = Prompts.chapterWriter(cfg),
+      systemPrompt = Prompts.writerPrompt(cfg),
       maxIterations = 6,
       maxTokens = 8096
     ).copy(executionPolicy = apiPolicy)
@@ -124,6 +142,121 @@ object BookGraph {
       description = "Prose quality rules shared by writers and the editor"
     )
 
+    // ---- scholar-mode agents (only built when the run is a research paper) ----
+
+    def scholarGraph: UIO[ScholarGraph] = {
+      val refSink = new ReferenceSink
+      val factSink = new FactCheckSink
+      val reviewSink = new ReviewSink
+      app.registerTool(RefReference, (input: Any) => refSink.record(input))
+      app.registerTool(RefFinding, (input: Any) => factSink.record(input, section = 0))
+      app.registerTool(RefReview, (input: Any) => reviewSink.record(input))
+
+      val bibliographer = createAgent(
+        name = "Bibliographer",
+        description = "Compiles the paper's numbered reference list of real, verifiable sources",
+        model = cfg.model,
+        systemPrompt = Prompts.bibliographer,
+        maxIterations = 30,
+        maxTokens = 4096
+      ).copy(executionPolicy = apiPolicy)
+
+      val factChecker = createAgent(
+        name = "FactChecker",
+        description = "Cross-checks a section's factual claims against the paper's references",
+        model = cfg.model,
+        systemPrompt = Prompts.factChecker,
+        maxIterations = 24,
+        maxTokens = 4096
+      ).copy(executionPolicy = apiPolicy)
+
+      val reviewer = createAgent(
+        name = "PeerReviewer",
+        description = "Peer-reviews the finished paper: score, verdict and per-section issues",
+        model = cfg.model,
+        systemPrompt = Prompts.reviewer,
+        maxIterations = 8,
+        maxTokens = 4096
+      ).copy(executionPolicy = apiPolicy)
+
+      val referenceTool = createTool(
+        name = "record_reference",
+        callableRef = RefReference,
+        description = "Record one bibliography entry. Call once per source, in citation order.",
+        inputSchema = Map(
+          "type" -> "object",
+          "properties" -> Map(
+            "number"  -> Map("type" -> "integer", "description" -> "Citation number, 1-based, in order"),
+            "authors" -> Map("type" -> "string", "description" -> "Real authors, e.g. \"A. Vaswani, N. Shazeer, et al.\""),
+            "year"    -> Map("type" -> "string", "description" -> "Publication year, e.g. \"2017\""),
+            "title"   -> Map("type" -> "string", "description" -> "Exact title of the work"),
+            "venue"   -> Map("type" -> "string", "description" -> "Journal, conference or publisher"),
+            "url"     -> Map("type" -> "string", "description" -> "DOI link if confident, otherwise empty")
+          ),
+          "required" -> List("authors", "year", "title")
+        )
+      )
+
+      val findingTool = createTool(
+        name = "record_finding",
+        callableRef = RefFinding,
+        description = "Record the cross-check result for one claim of the section. One call per claim.",
+        inputSchema = Map(
+          "type" -> "object",
+          "properties" -> Map(
+            "section"   -> Map("type" -> "integer", "description" -> "Section number under review"),
+            "claim"     -> Map("type" -> "string", "description" -> "The factual claim being checked"),
+            "citations" -> Map("type" -> "string", "description" -> "Reference numbers cited for it, e.g. \"[2]\" or \"[1, 4]\""),
+            "verdict"   -> Map("type" -> "string", "description" -> "supported | unsupported | contradicted | unverifiable"),
+            "severity"  -> Map("type" -> "string", "description" -> "minor | major"),
+            "note"      -> Map("type" -> "string", "description" -> "One sentence: why this verdict, and how to fix it")
+          ),
+          "required" -> List("claim", "verdict", "severity", "note")
+        )
+      )
+
+      val reviewTool = createTool(
+        name = "record_review",
+        callableRef = RefReview,
+        description = "Record the peer-review verdict. Call exactly once.",
+        inputSchema = Map(
+          "type" -> "object",
+          "properties" -> Map(
+            "score"   -> Map("type" -> "integer", "description" -> "Overall quality, 1-10"),
+            "verdict" -> Map("type" -> "string", "description" -> "\"accept\" or \"revise\""),
+            "summary" -> Map("type" -> "string", "description" -> "3-6 sentences: strengths, weaknesses, top improvement"),
+            "issues" -> Map(
+              "type" -> "array",
+              "description" -> "Concrete problems, one entry each (may be empty)",
+              "items" -> Map(
+                "type" -> "object",
+                "properties" -> Map(
+                  "section" -> Map("type" -> "integer", "description" -> "Section number the issue is in"),
+                  "severity" -> Map("type" -> "string", "description" -> "minor | major"),
+                  "comment" -> Map("type" -> "string", "description" -> "The problem and the required fix")
+                ),
+                "required" -> List("section", "severity", "comment")
+              )
+            )
+          ),
+          "required" -> List("score", "verdict", "summary", "issues")
+        )
+      )
+
+      for {
+        _ <- app.addAgent("Bibliographer", bibliographer)
+        _ <- app.addAgent("FactChecker", factChecker)
+        _ <- app.addAgent("PeerReviewer", reviewer)
+        _ <- app.addTool("record_reference", referenceTool)
+        _ <- app.addTool("record_finding", findingTool)
+        _ <- app.addTool("record_review", reviewTool)
+        _ <- app.connectTool(bibliographer, referenceTool)
+        _ <- app.connectTool(factChecker, findingTool)
+        _ <- app.connectTool(reviewer, reviewTool)
+        _ <- app.connectContext(reviewer, styleGuide, weight = Some(0.4))
+      } yield ScholarGraph(bibliographer, factChecker, reviewer, refSink, factSink, reviewSink)
+    }
+
     for {
       _          <- app.addAgent("BookArchitect", architect)
       _          <- app.addAgent("ChapterWriter", writer)
@@ -141,6 +274,7 @@ object BookGraph {
       _          <- app.connectContext(editor, styleGuide, weight = Some(0.6))
       _          <- app.delegate(architect, writer)
       _          <- app.delegate(writer, editor)
-    } yield (app, architect, writer, editor)
+      scholar    <- if (cfg.scholar) scholarGraph.map(Some(_)) else ZIO.succeed(None)
+    } yield (app, architect, writer, editor, scholar)
   }
 }

@@ -13,7 +13,8 @@ final case class CreateBookRequest(
   baseUrl: Option[String] = None,
   apiKey: Option[String] = None,
   temperature: Option[Double] = None,
-  skipEditor: Option[Boolean] = None
+  skipEditor: Option[Boolean] = None,
+  scholar: Option[Boolean] = None
 ) derives JsonCodec
 
 final case class ChapterEdit(
@@ -75,6 +76,7 @@ final case class BookDto(
   status: String,
   writtenCount: Int,
   totalChapters: Int,
+  scholar: Option[Boolean] = None,
   outline: Option[OutlineDto] = None,
   chapters: List[ChapterStatusDto] = Nil,
   currentChapter: Option[Int] = None,
@@ -93,6 +95,7 @@ final case class BookListItemDto(
   prompt: String,
   status: String,
   title: Option[String] = None,
+  scholar: Option[Boolean] = None,
   writtenCount: Int = 0,
   totalChapters: Int = 0
 ) derives JsonCodec

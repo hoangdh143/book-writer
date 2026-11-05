@@ -96,6 +96,7 @@ object BookMapper {
       prompt = cfg.prompt,
       model = cfg.model,
       status = phase.status,
+      scholar = Some(cfg.scholar),
       writtenCount = written.size,
       totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters),
       outline = outline.map(outlineDto),
@@ -118,6 +119,7 @@ object BookMapper {
       prompt = cfg.prompt,
       status = phase.status,
       title = outline.map(_.title),
+      scholar = Some(cfg.scholar),
       writtenCount = written.size,
       totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters)
     )

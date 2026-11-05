@@ -14,6 +14,7 @@ final case class Config(
   baseUrl: String = "https://api.deepseek.com/chat/completions",
   temperature: Double = 0.8,
   skipEditor: Boolean = false,
+  scholar: Boolean = false,
   debug: Boolean = false,
   serve: Boolean = false
 )
@@ -44,6 +45,15 @@ object Config {
     localPrefixes.exists(lowered.startsWith)
   }
 
+  private val defaultLmStudioChatUrl = "http://localhost:1234/v1/chat/completions"
+
+  /** The UI always asks for LM Studio on localhost; inside a container that has to mean the host. */
+  private def routedBaseUrl(url: String): String =
+    sys.env.get("LM_STUDIO_BASE_URL") match {
+      case Some(base) if url == defaultLmStudioChatUrl => s"${base.stripSuffix("/")}/chat/completions"
+      case _                                           => url
+    }
+
   val usage: String =
     """
       |book-writer — generate a full book from a prompt, on loki-engine
@@ -69,11 +79,15 @@ object Config {
       |                        (default https://api.deepseek.com/chat/completions)
       |  --temperature <t>     Sampling temperature (default 0.8)
       |  --no-editor           Skip the editor stage (foreword + back-cover blurb)
+      |  --scholar             Scholar mode: produce a research paper with a bibliography,
+      |                        inline citations, per-section fact cross-checking and a
+      |                        peer-review pass before assembly
       |  --debug               Print stack traces on failure
       |
       |Examples:
       |  sbt "run --chapters 4 --words 900 \"A cozy mystery set in a lighthouse village\""
       |  sbt "run \"A practical guide to urban gardening for busy people\" --chapters 5"
+      |  sbt "run --scholar \"The impact of transformer architectures on low-resource machine translation\""
       |""".stripMargin
 
   def fromRequest(req: bookwriter.web.CreateBookRequest): Either[String, Config] = {
@@ -101,9 +115,10 @@ object Config {
       concurrency = concurrency,
       model = req.model.getOrElse("deepseek-chat"),
       apiKey = apiKey,
-      baseUrl = baseUrl,
+      baseUrl = routedBaseUrl(baseUrl),
       temperature = temperature,
-      skipEditor = req.skipEditor.getOrElse(false)
+      skipEditor = req.skipEditor.getOrElse(false),
+      scholar = req.scholar.getOrElse(false)
     )
   }
 
@@ -147,6 +162,7 @@ object Config {
         case _ => Left(s"--temperature must be a number in 0.0..2.0 (got '$v')")
       }
       case "--no-editor" :: t        => loop(t, cfg.copy(skipEditor = true), positional)
+      case "--scholar" :: t          => loop(t, cfg.copy(scholar = true), positional)
       case "--debug" :: t            => loop(t, cfg.copy(debug = true), positional)
       case "--serve" :: t            => loop(t, cfg.copy(serve = true), positional)
       case other :: t                => Left(s"Unknown argument: $other\n$usage")

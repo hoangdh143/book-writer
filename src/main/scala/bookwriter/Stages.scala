@@ -48,7 +48,8 @@ object Stages {
     idx: Int,
     prevEnding: Option[String],
     notes: List[String] = Nil,
-    revision: Option[String] = None
+    revision: Option[String] = None,
+    refs: List[Reference] = Nil
   ): ZIO[Any, Throwable, ChapterDraft] = {
     val plan = outline.chapters(idx)
     val totalParts = Config.segmentCount(cfg.wordsPerChapter)
@@ -67,13 +68,13 @@ object Stages {
       }
 
     if (totalParts <= 1)
-      withRetries(Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision), 2)
+      withRetries(Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision, refs), 2)
     else
       withRetries(
-        Briefs.chapterOpening(outline, idx, prevEnding, cfg, notes, revision, totalParts), 2
+        Briefs.chapterOpening(outline, idx, prevEnding, cfg, notes, revision, totalParts, refs), 2
       ).flatMap { opening =>
         ZIO.foldLeft((2 to totalParts).toList)(opening) { (draft, part) =>
-          val brief = Briefs.chapterContinuation(outline, idx, draft.text, part, totalParts, cfg, notes)
+          val brief = Briefs.chapterContinuation(outline, idx, draft.text, part, totalParts, cfg, notes, refs)
           withRetries(brief, 2).map(next => ChapterDraft(s"${draft.text}\n\n${next.text}", next.context))
         }
       }
@@ -94,6 +95,63 @@ object Stages {
       case (fw, bl) if fw.nonEmpty && bl.nonEmpty => ZIO.succeed((fw, bl))
       case _                                      => attempt()
     }
+  }
+
+  // ---- scholar stages ---------------------------------------------------------
+
+  /** Stage S1: the Bibliographer compiles the paper's reference list. */
+  def bibliography(
+    app: GraphApp,
+    bibliographer: AgentNode,
+    sink: ReferenceSink,
+    outline: BookOutline,
+    cfg: Config
+  ): ZIO[Any, Throwable, List[Reference]] = {
+    def attempt(): ZIO[Any, Throwable, List[Reference]] =
+      ZIO.succeed(sink.reset()) *> app.run(bibliographer.nodeId, Briefs.bibliographerInput(outline, cfg)).map(_ => sink.references)
+
+    attempt().flatMap {
+      case refs if refs.nonEmpty => ZIO.succeed(refs)
+      case _                     => attempt()
+    }.filterOrElse(_.nonEmpty)(ZIO.fail(new RuntimeException(
+      "Bibliographer recorded no references after 2 attempts. Check that the model supports tool calling."
+    )))
+  }
+
+  /** Stage S2: the FactChecker cross-checks one section's claims against the references. */
+  def factCheck(
+    app: GraphApp,
+    checker: AgentNode,
+    sink: FactCheckSink,
+    outline: BookOutline,
+    wc: WrittenChapter,
+    refs: List[Reference]
+  ): ZIO[Any, Throwable, List[Finding]] = {
+    def attempt(): ZIO[Any, Throwable, List[Finding]] =
+      ZIO.succeed(sink.reset()) *> app.run(checker.nodeId, Briefs.factCheckInput(outline, wc, refs)).map(_ => sink.findings)
+
+    attempt().flatMap {
+      case fs if fs.nonEmpty => ZIO.succeed(fs)
+      case _                 => attempt()
+    }.catchAll(_ => ZIO.succeed(Nil))
+  }
+
+  /** Stage S3: the PeerReviewer reviews the finished paper. */
+  def peerReview(
+    app: GraphApp,
+    reviewer: AgentNode,
+    sink: ReviewSink,
+    outline: BookOutline,
+    chapters: List[WrittenChapter],
+    refs: List[Reference]
+  ): ZIO[Any, Throwable, Option[ReviewReport]] = {
+    def attempt(): ZIO[Any, Throwable, Option[ReviewReport]] =
+      ZIO.succeed(sink.reset()) *> app.run(reviewer.nodeId, Briefs.reviewerInput(outline, chapters, refs)).map(_ => sink.get)
+
+    attempt().flatMap {
+      case Some(report) => ZIO.succeed(Some(report))
+      case None         => attempt()
+    }.catchAll(_ => ZIO.succeed(None))
   }
 
   def responseText(output: Any): String = {

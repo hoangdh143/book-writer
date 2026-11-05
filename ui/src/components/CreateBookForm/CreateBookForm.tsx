@@ -3,19 +3,20 @@ import type { FormEvent } from 'react'
 import { z } from 'zod'
 import { useCreateBook } from '../../api/bookMutations'
 import { useLiveModels } from '../../api/liveModels'
-import { providerForModelId, providerLabels, resolveModelChoice } from '../../domain/models'
+import { providerForModelId, resolveModelChoice } from '../../domain/models'
 import type { KeyProvider } from '../../store/settingsStore'
 import type { ModelPreset } from '../../domain/models'
 import { useSettingsStore } from '../../store/settingsStore'
-import { button, panel } from '../../domain/uiClasses'
+import { button, hint, pageHeading } from '../../domain/uiClasses'
+import { ApiKeyHint } from './ApiKeyHint'
 import { initialValues, CreateBookFields } from './CreateBookFields'
 import type { FormValues } from './CreateBookFields'
 
 const formSchema = z
   .object({
     prompt: z.string().trim().min(1, 'Describe your book idea'),
-    chapters: z.coerce.number().int().min(1, '1..30').max(30, '1..30'),
-    wordsPerChapter: z.coerce.number().int().min(200, 'At least 200 words'),
+    chapters: z.coerce.number().int().min(1, 'Choose 1 to 30 chapters').max(30, 'Choose 1 to 30 chapters'),
+    wordsPerChapter: z.coerce.number().int().min(200, 'Use at least 200 words per chapter'),
     modelId: z.string().min(1),
     customModel: z.string(),
     customBaseUrl: z.string(),
@@ -57,10 +58,6 @@ export const CreateBookForm = () => {
     setValues((current) => ({ ...current, ...patch }))
 
   const saved = savedKeyFor(values.modelId, live.presets, savedKeys)
-  const apiKeyHint =
-    saved.key !== '' && saved.provider !== undefined
-      ? `Using the ${providerLabels[saved.provider]} key saved in Settings`
-      : undefined
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
@@ -70,24 +67,34 @@ export const CreateBookForm = () => {
       return
     }
     setErrors({})
-    const saved = savedKeyFor(parsed.data.modelId, live.presets, savedKeys)
-    create.mutate({
-      prompt: parsed.data.prompt,
-      chapters: parsed.data.chapters,
-      wordsPerChapter: parsed.data.wordsPerChapter,
-      apiKey: saved.key === '' ? undefined : saved.key,
-      ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
-    })
+    create.mutate(
+      {
+        prompt: parsed.data.prompt,
+        chapters: parsed.data.chapters,
+        wordsPerChapter: parsed.data.wordsPerChapter,
+        apiKey: saved.key === '' ? undefined : saved.key,
+        scholar: values.scholar || undefined,
+        ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
+      },
+      { onSuccess: () => patchValues({ prompt: '' }) },
+    )
   }
 
   return (
-    <form className={`${panel} flex flex-col`} onSubmit={submit}>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-300">New book</h2>
-      <div className="flex flex-col gap-3">
-        <CreateBookFields values={values} errors={errors} onPatch={patchValues} apiKeyHint={apiKeyHint} />
-        <button className={button.primary} type="submit" disabled={create.isPending}>
-          {create.isPending ? 'Creating…' : 'Create book'}
-        </button>
+    <form className="flex flex-col" noValidate onSubmit={submit}>
+      <h2 className={pageHeading}>New book</h2>
+      <p className={`${hint} mt-1 mb-6`}>
+        Describe your idea. You’ll approve an outline before any chapter is written, and can review
+        each chapter as it’s finished.
+      </p>
+      <div className="flex flex-col gap-5">
+        <CreateBookFields values={values} errors={errors} onPatch={patchValues} />
+        <ApiKeyHint provider={saved.provider} hasKey={saved.key !== ''} />
+        <div>
+          <button className={button.primary} type="submit" disabled={create.isPending}>
+            {create.isPending ? 'Creating…' : 'Create book'}
+          </button>
+        </div>
       </div>
     </form>
   )
