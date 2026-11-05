@@ -13,7 +13,6 @@ services:
       # Passed through only when set on the host or in .env
       - DEEPSEEK_API_KEY
       - OPENAI_API_KEY
-      - WIRO_API_KEY
       - LLM_MAX_CONCURRENCY
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
     extra_hosts:

@@ -1,4 +1,4 @@
-export type Provider = 'deepseek' | 'openai' | 'openrouter' | 'lmstudio' | 'wiro' | 'custom'
+export type Provider = 'deepseek' | 'openai' | 'openrouter' | 'lmstudio' | 'custom'
 
 export interface ModelChoice {
   readonly model: string
@@ -26,20 +26,16 @@ export const openRouterChatUrl = 'https://openrouter.ai/api/v1/chat/completions'
 
 export const lmStudioChatUrl = 'http://localhost:1234/v1/chat/completions'
 
-export const wiroChatUrl = 'https://llm.wiro.ai/v1/chat/completions'
-
 export const providerLabels: Record<Exclude<Provider, 'custom'>, string> = {
   deepseek: 'DeepSeek',
   openai: 'OpenAI',
   openrouter: 'OpenRouter',
   lmstudio: 'LM Studio',
-  wiro: 'Wiro',
 }
 
 export const groupedProviders: readonly Exclude<Provider, 'custom'>[] = [
   'deepseek',
   'openai',
-  'wiro',
   'openrouter',
   'lmstudio',
 ]
@@ -68,36 +64,6 @@ export const modelPresets: readonly ModelPreset[] = [
     label: 'GPT-4o',
     provider: 'openai',
     baseUrl: 'https://api.openai.com/v1/chat/completions',
-  },
-  {
-    id: 'qwen/qwen3-8-27b-uncensored',
-    label: 'Qwen3.8 27B Uncensored',
-    provider: 'wiro',
-    baseUrl: wiroChatUrl,
-  },
-  {
-    id: 'qwen/qwen3-8-27b-obliterated',
-    label: 'Qwen3.8 27B Obliterated',
-    provider: 'wiro',
-    baseUrl: wiroChatUrl,
-  },
-  {
-    id: 'qwen/qwen3-5-27b-heretic',
-    label: 'Qwen3.5 27B Heretic',
-    provider: 'wiro',
-    baseUrl: wiroChatUrl,
-  },
-  {
-    id: 'qwen/qwen3-5-9b-heretic',
-    label: 'Qwen3.5 9B Heretic',
-    provider: 'wiro',
-    baseUrl: wiroChatUrl,
-  },
-  {
-    id: 'qwen/qwen3-5-4b-heretic',
-    label: 'Qwen3.5 4B Heretic',
-    provider: 'wiro',
-    baseUrl: wiroChatUrl,
   },
 ]
 

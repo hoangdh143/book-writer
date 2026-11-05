@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-export type KeyProvider = 'deepseek' | 'openai' | 'openrouter' | 'wiro'
+export type KeyProvider = 'deepseek' | 'openai' | 'openrouter'
 
-export const keyProviders: readonly KeyProvider[] = ['deepseek', 'openai', 'openrouter', 'wiro']
+export const keyProviders: readonly KeyProvider[] = ['deepseek', 'openai', 'openrouter']
 
 interface SettingsStore {
   readonly apiKeys: Record<KeyProvider, string>
@@ -11,7 +11,7 @@ interface SettingsStore {
   readonly clearApiKeys: () => void
 }
 
-const emptyKeys: Record<KeyProvider, string> = { deepseek: '', openai: '', openrouter: '', wiro: '' }
+const emptyKeys: Record<KeyProvider, string> = { deepseek: '', openai: '', openrouter: '' }
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
@@ -25,11 +25,6 @@ export const useSettingsStore = create<SettingsStore>()(
       name: 'book-writer-settings',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ apiKeys: state.apiKeys }),
-      // Settings saved before a provider existed lack its key; keep every provider a string.
-      merge: (persisted, current) => ({
-        ...current,
-        apiKeys: { ...emptyKeys, ...(persisted as Partial<SettingsStore> | undefined)?.apiKeys },
-      }),
     },
   ),
 )

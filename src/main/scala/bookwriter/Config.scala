@@ -45,17 +45,6 @@ object Config {
     localPrefixes.exists(lowered.startsWith)
   }
 
-  private def isWiroBaseUrl(url: String): Boolean =
-    url.toLowerCase.startsWith("https://llm.wiro.ai/")
-
-  private def keyEnvNameFor(baseUrl: String): String =
-    if (isWiroBaseUrl(baseUrl)) "WIRO_API_KEY" else "DEEPSEEK_API_KEY"
-
-  /** Wiro gets only its own key, so another provider's key is never sent to its gateway. */
-  private def envKeyFor(baseUrl: String): String =
-    if (isWiroBaseUrl(baseUrl)) sys.env.getOrElse("WIRO_API_KEY", "")
-    else sys.env.getOrElse("DEEPSEEK_API_KEY", sys.env.getOrElse("OPENAI_API_KEY", ""))
-
   private val defaultLmStudioChatUrl = "http://localhost:1234/v1/chat/completions"
 
   /** The UI always asks for LM Studio on localhost; inside a container that has to mean the host. */
@@ -84,8 +73,7 @@ object Config {
       |  --concurrency <n>     1 = chapters written sequentially with continuity (default);
       |                        >1 = chapters written concurrently (ZIO foreachPar)
       |  --model <name>        OpenAI-compatible model id (default deepseek-chat)
-      |  --api-key <key>       API key; falls back to env DEEPSEEK_API_KEY or OPENAI_API_KEY
-      |                        (WIRO_API_KEY when --base-url points at llm.wiro.ai).
+      |  --api-key <key>       API key; falls back to env DEEPSEEK_API_KEY or OPENAI_API_KEY.
   |                        Not required when --base-url points at a local endpoint (e.g. LM Studio)
       |  --base-url <url>      OpenAI-compatible chat-completions endpoint
       |                        (default https://api.deepseek.com/chat/completions)
@@ -100,12 +88,12 @@ object Config {
       |  sbt "run --chapters 4 --words 900 \"A cozy mystery set in a lighthouse village\""
       |  sbt "run \"A practical guide to urban gardening for busy people\" --chapters 5"
       |  sbt "run --scholar \"The impact of transformer architectures on low-resource machine translation\""
-      |  sbt "run --base-url https://llm.wiro.ai/v1/chat/completions --model qwen/qwen3-8-27b-uncensored \"A noir thriller\""
       |""".stripMargin
 
   def fromRequest(req: bookwriter.web.CreateBookRequest): Either[String, Config] = {
+    val envKey = sys.env.getOrElse("DEEPSEEK_API_KEY", sys.env.getOrElse("OPENAI_API_KEY", ""))
+    val apiKey = req.apiKey.getOrElse(envKey)
     val baseUrl = req.baseUrl.getOrElse(defaultBaseUrl)
-    val apiKey = req.apiKey.getOrElse(envKeyFor(baseUrl))
     val chapters = req.chapters.getOrElse(6)
     val words = req.wordsPerChapter.getOrElse(1500)
     val concurrency = req.concurrency.getOrElse(1)
@@ -118,7 +106,7 @@ object Config {
       _ <- if (concurrency != 1) Left(s"concurrency must be 1 (got $concurrency): the server writes chapters one at a time; parallel chapters are CLI-only (--concurrency)") else Right(())
       _ <- if (temperature < 0.0 || temperature > 2.0) Left("temperature must be in 0.0..2.0") else Right(())
       _ <- if (req.prompt.trim.isEmpty) Left("prompt must not be empty") else Right(())
-      _ <- if (apiKey.isEmpty && !isLocalBaseUrl(baseUrl)) Left(s"no API key: pass apiKey or set ${keyEnvNameFor(baseUrl)}") else Right(())
+      _ <- if (apiKey.isEmpty && !isLocalBaseUrl(baseUrl)) Left("no API key: pass apiKey or set DEEPSEEK_API_KEY") else Right(())
     } yield Config(
       prompt = req.prompt.trim,
       chapters = chapters,
@@ -135,6 +123,7 @@ object Config {
   }
 
   def parse(args: List[String]): Either[String, Config] = {
+    val envKey = sys.env.getOrElse("DEEPSEEK_API_KEY", sys.env.getOrElse("OPENAI_API_KEY", ""))
     val envPrompt = sys.env.getOrElse("BOOK_PROMPT", "")
 
     def intOf(s: String): Option[Int] = s.trim.toIntOption
@@ -145,11 +134,11 @@ object Config {
     def loop(rest: List[String], cfg: Config, positional: List[String]): Either[String, Config] = rest match {
       case Nil =>
         val prompt = Seq(cfg.prompt, positional.mkString(" ").trim, envPrompt).find(_.nonEmpty).getOrElse("")
-        val next = cfg.copy(prompt = prompt, apiKey = if (cfg.apiKey.nonEmpty) cfg.apiKey else envKeyFor(cfg.baseUrl))
+        val next = cfg.copy(prompt = prompt, apiKey = if (cfg.apiKey.nonEmpty) cfg.apiKey else envKey)
         if (next.serve) Right(next)
         else if (prompt.isEmpty) Left(usage)
         else if (next.apiKey.isEmpty && !isLocalBaseUrl(next.baseUrl))
-          Left(s"No API key found. Pass --api-key or set ${keyEnvNameFor(next.baseUrl)}.\n" + usage)
+          Left("No API key found. Pass --api-key or set DEEPSEEK_API_KEY.\n" + usage)
         else Right(next)
       case "--prompt" :: v :: t      => loop(t, cfg.copy(prompt = v), positional)
       case "--chapters" :: v :: t    => intOf(v) match {
