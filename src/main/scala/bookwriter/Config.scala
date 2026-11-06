@@ -106,7 +106,7 @@ object Config {
     for {
       _ <- inRange("chapters", chapters, 1, 30)
       _ <- if (words < 200) Left(s"wordsPerChapter must be at least 200 (got $words)") else Right(())
-      _ <- if (concurrency != 1) Left(s"concurrency must be 1 (got $concurrency): the server writes chapters one at a time; parallel chapters are CLI-only (--concurrency)") else Right(())
+      _ <- inRange("concurrency", concurrency, 1, 10)
       _ <- if (temperature < 0.0 || temperature > 2.0) Left("temperature must be in 0.0..2.0") else Right(())
       _ <- if (req.prompt.trim.isEmpty) Left("prompt must not be empty") else Right(())
       _ <- if (apiKey.isEmpty && !isLocalBaseUrl(baseUrl)) Left("no API key: pass apiKey or set DEEPSEEK_API_KEY") else Right(())

@@ -23,6 +23,7 @@ export interface CreateBookInput {
   readonly prompt: string
   readonly chapters?: number
   readonly wordsPerChapter?: number
+  readonly concurrency?: number
   readonly model?: string
   readonly baseUrl?: string
   readonly apiKey?: string

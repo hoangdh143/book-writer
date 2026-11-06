@@ -110,6 +110,10 @@ docker compose up --build -d    # then open http://localhost:8090
   queue for a free slot. A change applies right away and is saved in `output/settings.json`. Lower it if your
   provider returns rate-limit errors. `LLM_MAX_CONCURRENCY` sets the starting value until one is saved in
   Settings, which then takes priority. The CLI is not limited by this setting.
+- **Chapters at once:** set per book on the New book form (1–10, default 1). Above 1, chapters you don't
+  review individually are written in groups of that size, and each group finishes before the next starts.
+  Chapters in a group can't read each other, so they rely on the outline for continuity; later groups see
+  the earlier chapters. Chapter-by-chapter review always writes one at a time.
 - **Cover images:** every EPUB export gets an AI-generated cover based on the book's outline. It is
   generated once per book through an OpenAI-compatible images/generations endpoint
   (`IMAGE_BASE_URL`, default OpenAI's) with model `IMAGE_MODEL` (default `gpt-image-2.6-sunburst`) and key from
@@ -151,7 +155,7 @@ environment variable. The API key comes from `--api-key`, `DEEPSEEK_API_KEY` or 
 | `--chapters <n>` | 6 | Target number of chapters (1–30) |
 | `--words <n>` | 1500 | Target words per chapter (200–5000) |
 | `--out <path>` | `output/book.md` | Output Markdown file |
-| `--concurrency <n>` | 1 | 1 = sequential with full continuity; >1 = parallel `BatchExecutor` (CLI only; the server rejects values above 1) |
+| `--concurrency <n>` | 1 | 1 = sequential with full continuity; 2–10 = chapters written in parallel (in the web app, **Chapters at once**) |
 | `--model <name>` | `deepseek-chat` | OpenAI-compatible model id |
 | `--api-key <key>` | env | API key |
 | `--base-url <url>` | DeepSeek | Chat-completions endpoint |

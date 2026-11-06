@@ -91,6 +91,34 @@ Feature: Create a new book
     And the user clicks "Create book"
     Then the create request does not ask for diagrams
 
+  Scenario: Chapters are written one at a time by default
+    When the user writes the idea "A guide to bread"
+    And the user clicks "Create book"
+    Then the create request does not set chapters at once
+
+  Scenario: Chapters at once is sent with the new book
+    When the user writes the idea "A guide to compilers"
+    And the user sets chapters at once to "3"
+    And the user clicks "Create book"
+    Then the create request has 3 chapters at once
+
+  Scenario Outline: An out-of-range chapters at once value is refused
+    When the user writes the idea "A guide to compilers"
+    And the user sets chapters at once to "<value>"
+    And the user clicks "Create book"
+    Then the form shows the error "Choose 1 to 10 chapters at once"
+    And no book was created
+
+    Examples:
+      | value |
+      | 0     |
+      | 11    |
+
+  Scenario: Chapters written together are shown as a group
+    Given a book is writing chapters 3 to 5 together
+    Then the panel says "Writing chapters 3–5 of 6…"
+    And chapters 3, 4 and 5 are marked as writing
+
   Scenario: Ticking Diagrams asks for them on the new book
     When the user writes the idea "A guide to compilers"
     And the user ticks "Diagrams"

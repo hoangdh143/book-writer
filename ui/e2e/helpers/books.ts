@@ -84,6 +84,14 @@ export const generatingBook: Book = makeBook({
   chapters: chapterStates(['written', 'written', 'writing', 'pending', 'pending', 'pending']),
 })
 
+export const groupWritingBook: Book = makeBook({
+  status: 'generating',
+  outline: chapterPlans,
+  currentChapter: 3,
+  writtenCount: 2,
+  chapters: chapterStates(['written', 'written', 'writing', 'writing', 'writing', 'pending']),
+})
+
 export const chapterReviewBook: Book = makeBook({
   status: 'chapter_review',
   outline: chapterPlans,

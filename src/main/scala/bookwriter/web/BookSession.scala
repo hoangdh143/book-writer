@@ -166,7 +166,7 @@ final class BookSession private[web] (
               finish(outline, written, foreword, blurb)
             }
           })
-        case BookPhase.Planning | BookPhase.Generating(_, _, _, _, _, _) | BookPhase.Editing(_, _) =>
+        case BookPhase.Planning | BookPhase.Generating(_, _, _, _, _, _, _) | BookPhase.Editing(_, _) =>
           setPhase(BookPhase.Failed("Session was interrupted by a server restart", v.phase.status))
         case _ => ZIO.unit
       }
@@ -302,6 +302,8 @@ final class BookSession private[web] (
   ): ZIO[Any, Throwable, List[WrittenChapter]] =
     remaining match {
       case Nil => ZIO.succeed(done)
+      case _ if mode == RunMode.RunAll && cfg.concurrency > 1 =>
+        chapterBatch(outline, done, remaining, notes)
       case plan :: rest =>
         val idx = plan.number - 1
         val prevEnding = done.lastOption.map(_.endingExcerpt())
@@ -315,6 +317,35 @@ final class BookSession private[web] (
           next  <- nextAfterWrite(outline, done, refined, rest, mode, notes)
         } yield next
     }
+
+  /** Writes the next chapters together, up to the book's concurrency. Runs only read the graph
+    * store, which is not safe for concurrent writes, so continuity is attached once the whole
+    * group is drafted. Fact checks share one sink, so they run one at a time as well. */
+  private def chapterBatch(
+    outline: BookOutline,
+    done: List[WrittenChapter],
+    remaining: List[ChapterPlan],
+    notes: List[String]
+  ): ZIO[Any, Throwable, List[WrittenChapter]] = {
+    val (batch, rest) = remaining.splitAt(cfg.concurrency)
+    val prevEnding = done.lastOption.map(_.endingExcerpt())
+    for {
+      _      <- setPhase(BookPhase.Generating(outline, done, batch.head, rest, RunMode.RunAll, notes, batch.tail))
+      refs   <- refsRef.get
+      drafts <- ZIO
+                  .foreachPar(batch) { plan =>
+                    val ending = if (plan == batch.head) prevEnding else None
+                    Stages.writeChapter(app, writer, cfg, outline, plan.number - 1, ending, notes, None, refs)
+                      .tap(_ => log(s"Chapter ${plan.number} drafted"))
+                      .map(draft => plan -> draft)
+                  }
+                  .withParallelism(cfg.concurrency)
+      written <- ZIO.foreach(drafts) { case (plan, draft) =>
+                   attachContinuity(draft) *> scholarRefine(outline, WrittenChapter(plan, draft.text))
+                 }
+      next   <- chapterLoop(outline, done ++ written, rest, RunMode.RunAll, notes)
+    } yield next
+  }
 
   private def nextAfterWrite(
     outline: BookOutline,

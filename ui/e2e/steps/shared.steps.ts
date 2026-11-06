@@ -8,6 +8,7 @@ import {
   chapterTextV1,
   completedBook,
   diagramBook,
+  groupWritingBook,
   listItemFor,
   makeBook,
   planningBook,
@@ -65,6 +66,13 @@ Given('a completed book with diagrams is open', async ({ page, world }) => {
   await openFromList(page, titleOf(diagramBook))
 })
 
+Given('a book is writing chapters 3 to 5 together', async ({ page, world }) => {
+  world.listItem = listItemFor(groupWritingBook)
+  world.detailQueue = [groupWritingBook]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(groupWritingBook))
+})
+
 When('the user ticks {string}', async ({ page }, label) => {
   await page.getByRole('checkbox', { name: label }).check()
 })
@@ -76,6 +84,31 @@ Then('the create request asks for diagrams', async ({ world }) => {
 Then('the create request does not ask for diagrams', async ({ world }) => {
   expect(world.createBook).toBeDefined()
   expect(world.createBook?.['diagrams']).toBeUndefined()
+})
+
+When('the user sets chapters at once to {string}', async ({ page }, value) => {
+  await page.getByLabel('Chapters at once').fill(value)
+})
+
+Then('the create request does not set chapters at once', async ({ world }) => {
+  expect(world.createBook).toBeDefined()
+  expect(world.createBook?.['concurrency']).toBeUndefined()
+})
+
+Then('the create request has {int} chapters at once', async ({ world }, value) => {
+  expect(world.createBook?.['concurrency']).toBe(value)
+})
+
+Then('no book was created', async ({ world }) => {
+  expect(world.createBook).toBeUndefined()
+})
+
+Then('the panel says {string}', async ({ page }, text) => {
+  await expect(page.getByText(text)).toBeVisible()
+})
+
+Then('chapters 3, 4 and 5 are marked as writing', async ({ page }) => {
+  await expect(page.getByText('Writing…')).toHaveCount(3)
 })
 
 Then('the manuscript shows the diagram and blocks the remote image', async ({ page }) => {
@@ -159,7 +192,7 @@ When('the user writes the idea {string}', async ({ page }, idea) => {
 })
 
 When('the user sets chapters to {int} and words per chapter to {int}', async ({ page }, chapters, words) => {
-  await page.getByLabel('Chapters').fill(String(chapters))
+  await page.getByLabel('Chapters', { exact: true }).fill(String(chapters))
   await page.getByLabel('Words per chapter').fill(String(words))
 })
 

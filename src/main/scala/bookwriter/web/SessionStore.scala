@@ -51,7 +51,8 @@ object PersistedPhase:
     current: ChapterPlan,
     remaining: List[ChapterPlan],
     mode: String,
-    notes: List[String]
+    notes: List[String],
+    alongside: List[ChapterPlan] = Nil
   ) extends PersistedPhase derives JsonCodec
   final case class PChapterReview(
     outline: BookOutline,
@@ -120,8 +121,8 @@ object SessionStore:
   def toPersisted(phase: BookPhase): PersistedPhase = phase match
     case BookPhase.Planning                                 => PersistedPhase.PPlanning()
     case BookPhase.TocReview(outline, revision)             => PersistedPhase.PTocReview(outline, revision)
-    case BookPhase.Generating(o, w, c, r, mode, notes)      =>
-      PersistedPhase.PGenerating(o, w, c, r, mode.label, notes)
+    case BookPhase.Generating(o, w, c, r, mode, notes, alongside) =>
+      PersistedPhase.PGenerating(o, w, c, r, mode.label, notes, alongside)
     case BookPhase.ChapterReview(o, w, pending, r, notes)   =>
       PersistedPhase.PChapterReview(o, w, pending, r, notes)
     case BookPhase.Editing(o, w)                            => PersistedPhase.PEditing(o, w)
@@ -131,8 +132,8 @@ object SessionStore:
   def fromPersisted(persisted: PersistedPhase): BookPhase = persisted match
     case PersistedPhase.PPlanning()                                        => BookPhase.Planning
     case PersistedPhase.PTocReview(outline, revision)                      => BookPhase.TocReview(outline, revision)
-    case PersistedPhase.PGenerating(o, w, c, r, mode, notes)               =>
-      BookPhase.Generating(o, w, c, r, RunMode.parse(mode).getOrElse(RunMode.RunAll), notes)
+    case PersistedPhase.PGenerating(o, w, c, r, mode, notes, alongside)    =>
+      BookPhase.Generating(o, w, c, r, RunMode.parse(mode).getOrElse(RunMode.RunAll), notes, alongside)
     case PersistedPhase.PChapterReview(o, w, pending, r, notes)            =>
       BookPhase.ChapterReview(o, w, pending, r, notes)
     case PersistedPhase.PEditing(o, w)                                     => BookPhase.Editing(o, w)

@@ -1,5 +1,6 @@
 import { fieldLabel, growingText, hint, input } from '../../domain/uiClasses'
 import { FieldError } from '../FieldError'
+import { ChaptersAtOnceField } from './ChaptersAtOnceField'
 import { ModelFields } from './ModelFields'
 import { OptionCheckbox } from './OptionCheckbox'
 
@@ -7,6 +8,7 @@ export interface FormValues {
   readonly prompt: string
   readonly chapters: string
   readonly wordsPerChapter: string
+  readonly chaptersAtOnce: string
   readonly modelId: string
   readonly customModel: string
   readonly customBaseUrl: string
@@ -18,6 +20,7 @@ export const initialValues: FormValues = {
   prompt: '',
   chapters: '6',
   wordsPerChapter: '1500',
+  chaptersAtOnce: '1',
   modelId: 'deepseek-chat',
   customModel: '',
   customBaseUrl: '',
@@ -78,6 +81,11 @@ export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
       <FieldError message={errors.chapters ?? errors.wordsPerChapter} />
       <p className={hint}>{lengthEstimate(values)}</p>
     </div>
+    <ChaptersAtOnceField
+      value={values.chaptersAtOnce}
+      error={errors.chaptersAtOnce}
+      onChange={(chaptersAtOnce) => onPatch({ chaptersAtOnce })}
+    />
     <OptionCheckbox
       label="Scholar mode"
       description="Produce a research paper instead of a book: a real bibliography with numbered citations, per-section fact cross-checking with automatic repairs, and a peer-review pass before assembly."
