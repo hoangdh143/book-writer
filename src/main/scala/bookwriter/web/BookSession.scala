@@ -11,7 +11,8 @@ import java.time.Instant
 final case class SessionView(
   phase: BookPhase,
   gate: Option[Promise[Nothing, Gate]],
-  events: List[(Instant, String)]
+  events: List[(Instant, String)],
+  idea: String
 )
 
 final case class TocOutcome(outline: BookOutline, mode: RunMode, notes: List[String])
@@ -56,7 +57,7 @@ object BookSession {
       editorSink  = new EditorSink
       graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink, Some(bookwriter.LlmLimiter.gate))
       (app, architect, writer, editor, scholar, continuity) = graph
-      stateRef    <- Ref.make(SessionView(phase, None, events))
+      stateRef    <- Ref.make(SessionView(phase, None, events, sessionCfg.prompt))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
        refsRef     <- Ref.make[List[Reference]](Nil)
        findingsRef <- Ref.make[List[Finding]](Nil)
@@ -118,11 +119,11 @@ final class BookSession private[web] (
   def dto: UIO[BookDto] =
     stateRef.get.zipWith(memoryRef.get) { (v, memory) =>
       val events = v.events.reverse.map { case (at, m) => EventDto(at.toString, m) }
-      BookMapper.bookDto(id, cfg, v.phase, events, memory.bible)
+      BookMapper.bookDto(id, withIdea(v), v.phase, events, memory.bible)
     }
 
   def listItem: UIO[BookListItemDto] =
-    stateRef.get.map(v => BookMapper.listItem(id, cfg, v.phase))
+    stateRef.get.map(v => BookMapper.listItem(id, withIdea(v), v.phase))
 
   def chapterText(n: Int): UIO[Option[ChapterTextDto]] =
     stateRef.get.map(v => BookMapper.chapterText(v.phase, n))
@@ -224,10 +225,16 @@ final class BookSession private[web] (
     ZIO
       .fromOption(RunMode.parse(req.mode))
       .mapError(_ => "mode must be \"all\" or \"step\"")
-      .flatMap(mode => withGate(isTocReview, Gate.TocApprove(mode, req.comment, req.edits), "the TOC is not awaiting approval"))
+      .zip(parseIdea(req.prompt))
+      .flatMap { case (mode, idea) =>
+        withGate(isTocReview, Gate.TocApprove(mode, req.comment, req.edits), "the TOC is not awaiting approval", idea)
+      }
 
   def reviseToc(req: TocReviseRequest): IO[String, Unit] =
-    withGate(isTocReview, Gate.TocRevise(req.comment.trim), "the TOC is not awaiting approval")
+    parseIdea(req.prompt).flatMap {
+      case None if req.comment.trim.isEmpty => ZIO.fail("a revision needs feedback or a changed book idea")
+      case idea => withGate(isTocReview, Gate.TocRevise(req.comment.trim), "the TOC is not awaiting approval", idea)
+    }
 
   def approveChapter(n: Int, comment: Option[String]): IO[String, Unit] =
     withGate(isReviewing(n), Gate.ChapterApprove(comment), s"chapter $n is not awaiting review")
@@ -270,10 +277,16 @@ final class BookSession private[web] (
   private def isAnyReview(phase: BookPhase): Boolean =
     phase.isInstanceOf[BookPhase.ChapterReview]
 
-  private def withGate(expected: BookPhase => Boolean, build: Gate, reject: String): IO[String, Unit] =
+  private def parseIdea(raw: Option[String]): IO[String, Option[String]] =
+    raw.map(_.trim) match {
+      case Some("") => ZIO.fail("the book idea must not be empty")
+      case idea     => ZIO.succeed(idea)
+    }
+
+  private def withGate(expected: BookPhase => Boolean, build: Gate, reject: String, idea: Option[String] = None): IO[String, Unit] =
     stateRef.modify { s =>
       s.gate match {
-        case Some(p) if expected(s.phase) => (Right(p), s.copy(gate = None))
+        case Some(p) if expected(s.phase) => (Right(p), s.copy(gate = None, idea = idea.getOrElse(s.idea)))
         case _                            => (Left(reject), s)
       }
     }.flatMap {
@@ -291,8 +304,11 @@ final class BookSession private[web] (
   private def tocLoop(outline: BookOutline, revision: Int): ZIO[Any, Throwable, TocOutcome] =
     openGate(BookPhase.TocReview(outline, revision)).flatMap {
       case Gate.TocRevise(comment) =>
-        log(s"Revising outline: ${clip(comment, 80)}") *>
-          Stages.plan(app, architect, outlineSink, cfg, Some(comment)).flatMap(rev => tocLoop(rev, revision + 1))
+        persist *>
+          log(if (comment.isEmpty) "Revising outline from the changed book idea" else s"Revising outline: ${clip(comment, 80)}") *>
+          currentCfg
+            .flatMap(current => Stages.plan(app, architect, outlineSink, current, Some(comment).filter(_.nonEmpty)))
+            .flatMap(rev => tocLoop(rev, revision + 1))
       case Gate.TocApprove(mode, comment, edits) =>
         log(s"Outline approved (${mode.label} mode)") *>
           ZIO.succeed(TocOutcome(applyEdits(edits, outline), mode, comment.toList))
@@ -429,7 +445,7 @@ final class BookSession private[web] (
     * the outline and the ledger, so a failure here does not stop it. */
   private def bibleStage(outline: BookOutline, notes: List[String]): UIO[Unit] =
     log(s"Writing the ${guideName}") *>
-      Stages.storyBible(app, continuity, outline, cfg, notes).foldZIO(
+      currentCfg.flatMap(current => Stages.storyBible(app, continuity, outline, current, notes)).foldZIO(
         e => log(s"Could not write the $guideName (${clip(e.getMessage, 80)}); continuing with the outline only"),
         bible => memoryRef.update(_.copy(bible = bible)) *> persist *> log(s"${guideName.capitalize} ready")
       )
@@ -635,6 +651,11 @@ final class BookSession private[web] (
 
   // ---- helpers ---------------------------------------------------------------
 
+  /** The book idea can change during outline review, so it lives in the session state. */
+  private def withIdea(v: SessionView): Config = cfg.copy(prompt = v.idea)
+
+  private def currentCfg: UIO[Config] = stateRef.get.map(withIdea)
+
   private def setPhase(phase: BookPhase): UIO[Unit] =
     stateRef.update(_.copy(phase = phase)) *> persist
 
@@ -643,7 +664,7 @@ final class BookSession private[web] (
   def persist: UIO[Unit] =
     refsRef.get.zip(memoryRef.get).flatMap { case (refs, memory) =>
       stateRef.get.flatMap { v =>
-        SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt, refs, memory))
+        SessionStore.save(SessionStore.snapshot(id, withIdea(v), v.phase, v.events, startedAt, refs, memory))
       }
     }
 

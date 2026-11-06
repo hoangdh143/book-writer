@@ -136,7 +136,8 @@ export const mockTocActions = async (page: Page, world: World): Promise<void> =>
   })
   await page.route('**/api/books/b1/toc/revise', async (route) => {
     world.tocRevise = await route.request().postDataJSON()
-    world.detailQueue = [tocReviewBookV2]
+    const prompt = (world.tocRevise as { prompt?: string }).prompt
+    world.detailQueue = [{ ...tocReviewBookV2, prompt: prompt ?? tocReviewBookV2.prompt }]
     await json(route, { ok: true })
   })
 }

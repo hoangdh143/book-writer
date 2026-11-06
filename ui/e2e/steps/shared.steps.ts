@@ -416,6 +416,22 @@ Then('the book enters generation', async ({ page }) => {
   await expect(page.getByText('Generating')).toBeVisible()
 })
 
+When('the user changes the book idea to {string}', async ({ page }, idea) => {
+  await page.getByRole('textbox', { name: 'Book idea' }).fill(idea)
+})
+
+Then('the TOC approve request has idea {string}', async ({ world }, idea) => {
+  expect((world.tocApprove as { prompt?: string }).prompt).toBe(idea)
+})
+
+Then('the TOC approve request has no idea', async ({ world }) => {
+  expect((world.tocApprove as { prompt?: string }).prompt).toBeUndefined()
+})
+
+Then('the TOC revise request has idea {string}', async ({ world }, idea) => {
+  expect((world.tocRevise as { prompt?: string }).prompt).toBe(idea)
+})
+
 Then('the {string} button is disabled', async ({ page }, name) => {
   await expect(page.getByRole('button', { name })).toBeDisabled()
 })
@@ -533,7 +549,7 @@ Then('the chapter contains no injected markup', async ({ page }) => {
 })
 
 Then('the idea still reads {string}', async ({ page }, idea) => {
-  await expect(page.getByLabel('Book idea')).toHaveValue(idea)
+  await expect(page.getByRole('textbox', { name: 'Book idea' })).toHaveValue(idea)
 })
 
 Then('the settings dialog is open', async ({ page }) => {

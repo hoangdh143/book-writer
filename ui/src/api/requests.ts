@@ -17,6 +17,12 @@ export interface TocApproveInput {
   readonly mode: TocMode
   readonly comment?: string
   readonly edits?: OutlineEditsInput
+  readonly prompt?: string
+}
+
+export interface TocReviseInput {
+  readonly comment: string
+  readonly prompt?: string
 }
 
 export interface CreateBookInput {

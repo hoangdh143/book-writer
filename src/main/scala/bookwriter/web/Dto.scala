@@ -34,10 +34,11 @@ final case class OutlineEdits(
 final case class TocApproveRequest(
   mode: String,
   comment: Option[String] = None,
-  edits: Option[OutlineEdits] = None
+  edits: Option[OutlineEdits] = None,
+  prompt: Option[String] = None
 ) derives JsonCodec
 
-final case class TocReviseRequest(comment: String) derives JsonCodec
+final case class TocReviseRequest(comment: String, prompt: Option[String] = None) derives JsonCodec
 
 final case class ChapterApproveRequest(comment: Option[String] = None) derives JsonCodec
 

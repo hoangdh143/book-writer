@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ApiError, http, decodeWith } from './client'
-import type { CreateBookInput, TocApproveInput } from './requests'
+import type { CreateBookInput, TocApproveInput, TocReviseInput } from './requests'
 import {
   bookSchema,
   bookListItemSchema,
@@ -64,8 +64,8 @@ export const bookApi = {
   create: (input: CreateBookInput) => http.post(base, decodeWith(createdBookSchema), input),
   approveToc: (id: string, input: TocApproveInput) =>
     http.post(`${bookPath(id)}/toc/approve`, decodeWith(okSchema), input),
-  reviseToc: (id: string, comment: string) =>
-    http.post(`${bookPath(id)}/toc/revise`, decodeWith(okSchema), { comment }),
+  reviseToc: (id: string, input: TocReviseInput) =>
+    http.post(`${bookPath(id)}/toc/revise`, decodeWith(okSchema), input),
   approveChapter: (id: string, number: number, comment?: string) =>
     http.post(`${bookPath(id)}/chapters/${number}/approve`, decodeWith(okSchema), { comment }),
   reviseChapter: (id: string, number: number, comment: string) =>

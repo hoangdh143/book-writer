@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { bookApi } from './endpoints'
 import { bookKeys } from './bookQueries'
-import type { CreateBookInput, TocApproveInput } from './requests'
+import type { CreateBookInput, TocApproveInput, TocReviseInput } from './requests'
 import { useUiStore } from '../store/uiStore'
 import { reportMutationError } from '../store/toastStore'
 
@@ -50,7 +50,7 @@ export const useTocApprove = (id: string) => {
 export const useTocRevise = (id: string) => {
   const refresh = useRefreshBooks()
   return useMutation({
-    mutationFn: (comment: string) => bookApi.reviseToc(id, comment),
+    mutationFn: (input: TocReviseInput) => bookApi.reviseToc(id, input),
     onSuccess: refresh,
     onError: reportMutationError,
   })
