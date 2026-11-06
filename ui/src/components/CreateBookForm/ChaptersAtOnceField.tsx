@@ -22,9 +22,9 @@ export const ChaptersAtOnceField = ({ value, error, onChange }: Props) => (
     </label>
     <FieldError message={error} />
     <p className={hint}>
-      Higher is faster, but chapters written together can’t read each other, so they share only the
-      outline. Applies once you stop reviewing chapter by chapter, which always writes one at a time.
-      Concurrent LLM calls in Settings still applies.
+      How many chapters to write at the same time when you’re not reviewing each one. Higher is faster.
+      Chapters written together can’t see each other’s text, so each group is checked for contradictions and
+      repaired before the next one starts. Use 1 for the best consistency.
     </p>
   </div>
 )

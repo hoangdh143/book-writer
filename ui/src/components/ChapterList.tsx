@@ -3,6 +3,7 @@ import { chapterStateLabel } from '../domain/chapters'
 
 const stateText: Record<string, string> = {
   writing: 'text-sky-300',
+  checking: 'text-sky-300',
   written: 'text-emerald-300',
   awaiting_review: 'text-amber-300',
 }

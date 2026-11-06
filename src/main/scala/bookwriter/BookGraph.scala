@@ -26,6 +26,9 @@ object BookGraph {
   val RefReference = "bookwriter.tools.record_reference"
   val RefFinding = "bookwriter.tools.record_finding"
   val RefReview = "bookwriter.tools.record_review"
+  val RefBible = "bookwriter.tools.record_story_bible"
+  val RefFacts = "bookwriter.tools.record_chapter_facts"
+  val RefIssue = "bookwriter.tools.record_issue"
 
   private val apiPolicy = ExecutionPolicy(
     retryPolicy = RetryPolicy(maxAttempts = 4, backoffSeconds = 2.0, backoffMultiplier = 2.0)
@@ -37,7 +40,7 @@ object BookGraph {
     outlineSink: OutlineSink,
     editorSink: EditorSink,
     llmGate: Option[LlmGate] = None
-  ): UIO[(GraphApp, AgentNode, AgentNode, AgentNode, Option[ScholarGraph])] = {
+  ): UIO[(GraphApp, AgentNode, AgentNode, AgentNode, Option[ScholarGraph], ContinuityGraph)] = {
     val openAi = new OpenAIBackend(
       baseUrl = cfg.baseUrl,
       apiKey = cfg.apiKey,
@@ -50,6 +53,12 @@ object BookGraph {
     app.registerTool(RefChapter, (input: Any) => outlineSink.chapter(input))
     app.registerTool(RefForeword, (input: Any) => editorSink.recordForeword(input))
     app.registerTool(RefBlurb, (input: Any) => editorSink.recordBlurb(input))
+
+    val bibleSink = new BibleSink
+    val continuitySink = new ContinuitySink
+    app.registerTool(RefBible, (input: Any) => bibleSink.record(input))
+    app.registerTool(RefFacts, (input: Any) => continuitySink.recordFacts(input))
+    app.registerTool(RefIssue, (input: Any) => continuitySink.recordIssue(input))
 
     val architect = createAgent(
       name = if (cfg.scholar) "ResearchArchitect" else "BookArchitect",
@@ -135,6 +144,70 @@ object BookGraph {
           "text" -> Map("type" -> "string", "description" -> "The foreword text, markdown, no heading")
         ),
         "required" -> List("text")
+      )
+    )
+
+    val bibleWriter = createAgent(
+      name = "StoryBibleWriter",
+      description = "Decides the shared details every writer must follow before any chapter is written",
+      model = cfg.model,
+      systemPrompt = Prompts.storyBibleWriter(cfg),
+      maxIterations = 6,
+      maxTokens = 4096
+    ).copy(executionPolicy = apiPolicy)
+
+    val continuityEditor = createAgent(
+      name = "ContinuityEditor",
+      description = "Records what finished chapters established and reports contradictions between them",
+      model = cfg.model,
+      systemPrompt = Prompts.continuityEditor(cfg),
+      maxIterations = 32,
+      maxTokens = 4096
+    ).copy(executionPolicy = apiPolicy)
+
+    val bibleTool = createTool(
+      name = "record_story_bible",
+      callableRef = RefBible,
+      description = "Record the shared guide. Call exactly once.",
+      inputSchema = Map(
+        "type" -> "object",
+        "properties" -> Map(
+          "text" -> Map("type" -> "string", "description" -> "The whole guide, as markdown")
+        ),
+        "required" -> List("text")
+      )
+    )
+
+    val factsTool = createTool(
+      name = "record_chapter_facts",
+      callableRef = RefFacts,
+      description = "Record what one chapter established. Call once per chapter.",
+      inputSchema = Map(
+        "type" -> "object",
+        "properties" -> Map(
+          "chapter" -> Map("type" -> "integer", "description" -> "Chapter number"),
+          "summary" -> Map("type" -> "string", "description" -> "2-3 sentences, including how the chapter ends"),
+          "facts" -> Map(
+            "type" -> "string",
+            "description" -> "Up to 10 short, specific statements later chapters must respect, one per line"
+          )
+        ),
+        "required" -> List("chapter", "summary", "facts")
+      )
+    )
+
+    val issueTool = createTool(
+      name = "record_issue",
+      callableRef = RefIssue,
+      description = "Record one contradiction a reader would notice. Call once per contradiction.",
+      inputSchema = Map(
+        "type" -> "object",
+        "properties" -> Map(
+          "chapter" -> Map("type" -> "integer", "description" -> "The chapter that must change"),
+          "problem" -> Map("type" -> "string", "description" -> "What conflicts, quoting both sides"),
+          "fix" -> Map("type" -> "string", "description" -> "The smallest change that resolves it")
+        ),
+        "required" -> List("chapter", "problem", "fix")
       )
     )
 
@@ -267,6 +340,14 @@ object BookGraph {
       _          <- app.addTool("record_chapter", chapterTool)
       _          <- app.addTool("record_blurb", blurbTool)
       _          <- app.addTool("record_foreword", forewordTool)
+      _          <- app.addAgent("StoryBibleWriter", bibleWriter)
+      _          <- app.addAgent("ContinuityEditor", continuityEditor)
+      _          <- app.addTool("record_story_bible", bibleTool)
+      _          <- app.addTool("record_chapter_facts", factsTool)
+      _          <- app.addTool("record_issue", issueTool)
+      _          <- app.connectTool(bibleWriter, bibleTool)
+      _          <- app.connectTool(continuityEditor, factsTool)
+      _          <- app.connectTool(continuityEditor, issueTool)
       _          <- app.addContext("craft-guidelines", styleGuide)
       _          <- app.connectTool(architect, metaTool)
       _          <- app.connectTool(architect, chapterTool)
@@ -277,6 +358,6 @@ object BookGraph {
       _          <- app.delegate(architect, writer)
       _          <- app.delegate(writer, editor)
       scholar    <- if (cfg.scholar) scholarGraph.map(Some(_)) else ZIO.succeed(None)
-    } yield (app, architect, writer, editor, scholar)
+    } yield (app, architect, writer, editor, scholar, ContinuityGraph(bibleWriter, continuityEditor, bibleSink, continuitySink))
   }
 }

@@ -27,6 +27,11 @@ sealed trait BookPhase:
   def status: String
 
 object BookPhase:
+  /** What the chapters in hand are going through; the chapter list shows it as their state. */
+  val Preparing = "preparing"
+  val Writing = "writing"
+  val Checking = "checking"
+
   case object Planning                                              extends BookPhase { val status = "planning" }
   final case class TocReview(outline: BookOutline, revision: Int)   extends BookPhase { val status = "toc_review" }
   final case class Generating(
@@ -36,7 +41,8 @@ object BookPhase:
     remaining: List[ChapterPlan],
     mode: RunMode,
     notes: List[String],
-    alongside: List[ChapterPlan] = Nil
+    alongside: List[ChapterPlan] = Nil,
+    stage: String = BookPhase.Writing
   )                                                                 extends BookPhase { val status = "generating" }
   final case class ChapterReview(
     outline: BookOutline,
@@ -72,9 +78,9 @@ object BookMapper {
       case BookPhase.ChapterReview(_, written, pending, _, _) =>
         if pending.plan.number == n then Some(review(pending))
         else done(n, written)
-      case BookPhase.Generating(_, written, current, _, _, _, alongside) =>
-        if (current :: alongside).exists(_.number == n) then Some(ChapterStatusDto(n, "", "", "writing"))
-        else done(n, written)
+      case g: BookPhase.Generating =>
+        if (g.current :: g.alongside).exists(_.number == n) then Some(ChapterStatusDto(n, "", "", g.stage))
+        else done(n, g.written)
       case _ => None
     }
     def done(n: Int, written: List[WrittenChapter]): Option[ChapterStatusDto] =
@@ -88,7 +94,7 @@ object BookMapper {
     }
   }
 
-  def bookDto(id: String, cfg: Config, phase: BookPhase, events: List[EventDto]): BookDto = {
+  def bookDto(id: String, cfg: Config, phase: BookPhase, events: List[EventDto], storyBible: String = ""): BookDto = {
     val outline = outlineOf(phase)
     val written = writtenOf(phase)
     val chapters = outline.toList.flatMap(o => chapterStatus(o, phase))
@@ -100,6 +106,7 @@ object BookMapper {
       scholar = Some(cfg.scholar),
       writtenCount = written.size,
       totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters),
+      storyBible = Some(storyBible).filter(_.nonEmpty),
       outline = outline.map(outlineDto),
       chapters = chapters,
       currentChapter = currentOf(phase),
@@ -132,7 +139,7 @@ object BookMapper {
     case BookPhase.ChapterReview(_, written, pending, _, _) =>
       if pending.plan.number == n then Some(ChapterTextDto(n, pending.plan.title, pending.text))
       else fromWritten(written, n)
-    case BookPhase.Generating(_, written, _, _, _, _, _) => fromWritten(written, n)
+    case g: BookPhase.Generating                        => fromWritten(g.written, n)
     case _                                              => None
   }
 
@@ -142,7 +149,7 @@ object BookMapper {
   def outlineOf(phase: BookPhase): Option[BookOutline] = phase match {
     case BookPhase.Planning                        => None
     case BookPhase.TocReview(o, _)                 => Some(o)
-    case BookPhase.Generating(o, _, _, _, _, _, _) => Some(o)
+    case g: BookPhase.Generating                   => Some(g.outline)
     case BookPhase.ChapterReview(o, _, _, _, _)    => Some(o)
     case BookPhase.Editing(o, _)                   => Some(o)
     case BookPhase.Completed(o, _, _, _, _)        => Some(o)
@@ -150,7 +157,7 @@ object BookMapper {
   }
 
   private def writtenOf(phase: BookPhase): List[WrittenChapter] = phase match {
-    case BookPhase.Generating(_, written, _, _, _, _, _) => written
+    case g: BookPhase.Generating                      => g.written
     case BookPhase.ChapterReview(_, written, _, _, _) => written
     case BookPhase.Editing(_, written)                => written
     case BookPhase.Completed(_, written, _, _, _)     => written
@@ -158,13 +165,13 @@ object BookMapper {
   }
 
   private def currentOf(phase: BookPhase): Option[Int] = phase match {
-    case BookPhase.Generating(_, _, current, _, _, _, _) => Some(current.number)
+    case g: BookPhase.Generating                      => Some(g.current.number)
     case BookPhase.ChapterReview(_, _, pending, _, _) => Some(pending.plan.number)
     case _                                            => None
   }
 
   private def modeOf(phase: BookPhase): Option[String] = phase match {
-    case BookPhase.Generating(_, _, _, _, mode, _, _) => Some(mode.label)
+    case g: BookPhase.Generating                   => Some(g.mode.label)
     case _                                         => None
   }
 }

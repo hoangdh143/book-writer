@@ -5,17 +5,22 @@ import { createBdd } from 'playwright-bdd'
 import { test } from './fixtures'
 import {
   chapterReviewBook,
+  bibleBook,
   chapterTextV1,
   completedBook,
   diagramBook,
+  groupCheckingBook,
   groupWritingBook,
   listItemFor,
   makeBook,
   planningBook,
+  preparingBook,
   titleOf,
   tocReviewBook,
 } from '../helpers/books'
 import { mockBookApi, mockChapterActions, mockTocActions } from '../helpers/mocks'
+import type { Book } from '../../src/api/types'
+import type { World } from '../helpers/world'
 
 export const { Given, When, Then } = createBdd(test)
 
@@ -71,6 +76,42 @@ Given('a book is writing chapters 3 to 5 together', async ({ page, world }) => {
   world.detailQueue = [groupWritingBook]
   await mockBookApi(page, world)
   await openFromList(page, titleOf(groupWritingBook))
+})
+
+const openGeneratingBook = async (page: Page, world: World, book: Book): Promise<void> => {
+  world.listItem = listItemFor(book)
+  world.detailQueue = [book]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(book))
+}
+
+Given('a book is checking chapters 3 to 5', async ({ page, world }) => {
+  await openGeneratingBook(page, world, groupCheckingBook)
+})
+
+Given('a book is preparing its story bible', async ({ page, world }) => {
+  await openGeneratingBook(page, world, preparingBook)
+})
+
+Given('a book with a story bible is open', async ({ page, world }) => {
+  await openGeneratingBook(page, world, bibleBook)
+})
+
+When('the user opens the story bible', async ({ page }) => {
+  await page.getByText('Story bible', { exact: true }).click()
+})
+
+Then('the story bible shows {string}', async ({ page }, text) => {
+  await expect(page.getByText(text)).toBeVisible()
+  await expect(page.getByText('<script>alert(1)</script>')).toBeVisible()
+})
+
+Then('no story bible is offered', async ({ page }) => {
+  await expect(page.getByText('Story bible', { exact: true })).toHaveCount(0)
+})
+
+Then('{int} chapters are marked {string}', async ({ page }, count, label) => {
+  await expect(page.getByText(label, { exact: true })).toHaveCount(count)
 })
 
 When('the user ticks {string}', async ({ page }, label) => {

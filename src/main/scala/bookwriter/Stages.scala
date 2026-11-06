@@ -1,6 +1,6 @@
 package bookwriter
 
-import zio.ZIO
+import zio.{UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.ExecutionContext
 import loki.engine.core.nodes.AgentNode
@@ -49,7 +49,9 @@ object Stages {
     prevEnding: Option[String],
     notes: List[String] = Nil,
     revision: Option[String] = None,
-    refs: List[Reference] = Nil
+    refs: List[Reference] = Nil,
+    memory: String = "",
+    draft: Option[String] = None
   ): ZIO[Any, Throwable, ChapterDraft] = {
     val plan = outline.chapters(idx)
     val totalParts = Config.segmentCount(cfg.wordsPerChapter)
@@ -68,14 +70,14 @@ object Stages {
       }
 
     if (totalParts <= 1)
-      withRetries(Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision, refs), 2)
+      withRetries(Briefs.chapter(outline, idx, prevEnding, cfg, notes, revision, refs, memory, draft), 2)
     else
       withRetries(
-        Briefs.chapterOpening(outline, idx, prevEnding, cfg, notes, revision, totalParts, refs), 2
+        Briefs.chapterOpening(outline, idx, prevEnding, cfg, notes, revision, totalParts, refs, memory, draft), 2
       ).flatMap { opening =>
-        ZIO.foldLeft((2 to totalParts).toList)(opening) { (draft, part) =>
-          val brief = Briefs.chapterContinuation(outline, idx, draft.text, part, totalParts, cfg, notes, refs)
-          withRetries(brief, 2).map(next => ChapterDraft(s"${draft.text}\n\n${next.text}", next.context))
+        ZIO.foldLeft((2 to totalParts).toList)(opening) { (soFar, part) =>
+          val brief = Briefs.chapterContinuation(outline, idx, soFar.text, part, totalParts, cfg, notes, refs, memory, revision, draft)
+          withRetries(brief, 2).map(next => ChapterDraft(s"${soFar.text}\n\n${next.text}", next.context))
         }
       }
   }
@@ -96,6 +98,71 @@ object Stages {
       case _                                      => attempt()
     }
   }
+
+  // ---- continuity stages ------------------------------------------------------
+
+  /** Writes the shared guide from the approved outline, before any chapter exists. */
+  def storyBible(
+    app: GraphApp,
+    continuity: ContinuityGraph,
+    outline: BookOutline,
+    cfg: Config,
+    notes: List[String]
+  ): ZIO[Any, Throwable, String] = {
+    def attempt(): ZIO[Any, Throwable, String] =
+      ZIO.succeed(continuity.bibleSink.reset()) *>
+        app.run(continuity.bibleWriter.nodeId, Briefs.bibleInput(outline, cfg, notes)).map(_ => continuity.bibleSink.text)
+
+    attempt().flatMap(text => if (text.nonEmpty) ZIO.succeed(text) else attempt())
+      .filterOrFail(_.nonEmpty)(new RuntimeException("the model recorded no guide"))
+  }
+
+  /** Reads a group of chapters into ledger entries and, when `check` is set, contradictions.
+    * Oversized groups are read in slices. This never fails: the caller keeps the drafts. */
+  def continuityPass(
+    app: GraphApp,
+    continuity: ContinuityGraph,
+    outline: BookOutline,
+    memory: ContinuityMemory,
+    done: List[WrittenChapter],
+    group: List[WrittenChapter],
+    check: Boolean,
+    scholar: Boolean
+  ): UIO[ContinuityReport] = {
+    def read(slice: List[WrittenChapter], guide: String, before: Option[WrittenChapter]): ZIO[Any, Throwable, ContinuityReport] = {
+      val numbers = slice.map(_.plan.number).toSet
+      val input = Briefs.continuityInput(outline, guide, before, slice, check)
+      ZIO.succeed(continuity.sink.reset()) *> app.run(continuity.editor.nodeId, input).map { _ =>
+        ContinuityReport(
+          entries = continuity.sink.ledger.filter(e => numbers(e.chapter)),
+          issues = if (check) continuity.sink.issues.filter(i => numbers(i.chapter)) else Nil
+        )
+      }
+    }
+
+    def readWithRetry(slice: List[WrittenChapter], guide: String, before: Option[WrittenChapter]): UIO[ContinuityReport] =
+      read(slice, guide, before)
+        .flatMap(report => if (report.entries.nonEmpty) ZIO.succeed(report) else read(slice, guide, before))
+        .catchAll(e => ZIO.succeed(ContinuityReport(failure = Some(String.valueOf(e.getMessage)))))
+        .map(report => if (report.entries.isEmpty && report.failure.isEmpty) report.copy(failure = Some("the model recorded nothing")) else report)
+
+    ZIO.foldLeft(continuitySlices(group))((done, memory, ContinuityReport())) { case ((seen, known, total), slice) =>
+      readWithRetry(slice, known.forWriter(seen, scholar), seen.lastOption).map { report =>
+        val merged = ContinuityReport(total.entries ++ report.entries, total.issues ++ report.issues, total.failure.orElse(report.failure))
+        (seen ++ slice, known.withEntries(report.entries), merged)
+      }
+    }.map(_._3)
+  }
+
+  private val maxContinuityWords = 30000
+
+  private def continuitySlices(group: List[WrittenChapter]): List[List[WrittenChapter]] =
+    group.foldLeft(List.empty[List[WrittenChapter]]) { (slices, wc) =>
+      slices match {
+        case head :: tail if head.map(_.wordCount).sum + wc.wordCount <= maxContinuityWords => (head :+ wc) :: tail
+        case _                                                                               => List(wc) :: slices
+      }
+    }.reverse
 
   // ---- scholar stages ---------------------------------------------------------
 

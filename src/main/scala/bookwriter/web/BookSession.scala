@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -40,7 +40,7 @@ object BookSession {
       events = persisted.events.map { case (atMs, message) => (Instant.ofEpochMilli(atMs), message) },
       startedAt = Instant.ofEpochMilli(persisted.startedAtMs)
     ).flatMap { session =>
-      session.setReferences(persisted.references) *> session.log("Session restored from disk") *> session.resume().as(session)
+      session.setReferences(persisted.references) *> session.setContinuity(persisted.continuity) *> session.log("Session restored from disk") *> session.resume().as(session)
     }
 
   private def build(
@@ -55,7 +55,7 @@ object BookSession {
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
       graph       <- BookGraph.build(store, sessionCfg, outlineSink, editorSink, Some(bookwriter.LlmLimiter.gate))
-      (app, architect, writer, editor, scholar) = graph
+      (app, architect, writer, editor, scholar, continuity) = graph
       stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
        refsRef     <- Ref.make[List[Reference]](Nil)
@@ -63,6 +63,7 @@ object BookSession {
        reviewRef   <- Ref.make[Option[ReviewReport]](None)
        coverRef    <- Ref.make[Option[CoverImage]](None)
        coverMutex  <- zio.Semaphore.make(1L)
+       memoryRef   <- Ref.make(ContinuityMemory())
     } yield {
       val session = new BookSession(
         id = id,
@@ -72,6 +73,8 @@ object BookSession {
         writer = writer,
         editor = editor,
         scholar = scholar,
+        continuity = continuity,
+        memoryRef = memoryRef,
         outlineSink = outlineSink,
         editorSink = editorSink,
         stateRef = stateRef,
@@ -96,6 +99,8 @@ final class BookSession private[web] (
   writer: AgentNode,
   editor: AgentNode,
   scholar: Option[ScholarGraph],
+  continuity: ContinuityGraph,
+  memoryRef: Ref[ContinuityMemory],
   outlineSink: OutlineSink,
   editorSink: EditorSink,
   stateRef: Ref[SessionView],
@@ -111,9 +116,9 @@ final class BookSession private[web] (
   def view: UIO[SessionView] = stateRef.get
 
   def dto: UIO[BookDto] =
-    stateRef.get.map { v =>
+    stateRef.get.zipWith(memoryRef.get) { (v, memory) =>
       val events = v.events.reverse.map { case (at, m) => EventDto(at.toString, m) }
-      BookMapper.bookDto(id, cfg, v.phase, events)
+      BookMapper.bookDto(id, cfg, v.phase, events, memory.bible)
     }
 
   def listItem: UIO[BookListItemDto] =
@@ -166,7 +171,7 @@ final class BookSession private[web] (
               finish(outline, written, foreword, blurb)
             }
           })
-        case BookPhase.Planning | BookPhase.Generating(_, _, _, _, _, _, _) | BookPhase.Editing(_, _) =>
+        case BookPhase.Planning | _: BookPhase.Generating | BookPhase.Editing(_, _) =>
           setPhase(BookPhase.Failed("Session was interrupted by a server restart", v.phase.status))
         case _ => ZIO.unit
       }
@@ -187,7 +192,9 @@ final class BookSession private[web] (
 
   private def afterToc(outcome: TocOutcome): ZIO[Any, Throwable, Unit] =
     for {
+      _       <- preparing(outcome)
       _       <- if (cfg.scholar) bibliographyStage(outcome.outline) else ZIO.unit
+      _       <- bibleStage(outcome.outline, outcome.notes)
       written <- chapterLoop(outcome.outline, Nil, outcome.outline.chapters, outcome.mode, outcome.notes)
       front   <- editStage(outcome.outline, written)
       _       <- finish(outcome.outline, written, front._1, front._2)
@@ -310,17 +317,17 @@ final class BookSession private[web] (
         for {
           _     <- setPhase(BookPhase.Generating(outline, done, plan, rest, mode, notes))
           refs  <- refsRef.get
-          draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, None, refs)
+          memory <- writerMemory(done)
+          draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, None, refs, memory)
           wc     = WrittenChapter(plan, draft.text)
-          _     <- attachContinuity(draft)
-          refined <- scholarRefine(outline, wc)
+          refined <- scholarRefine(outline, done, wc)
           next  <- nextAfterWrite(outline, done, refined, rest, mode, notes)
         } yield next
     }
 
-  /** Writes the next chapters together, up to the book's concurrency. Runs only read the graph
-    * store, which is not safe for concurrent writes, so continuity is attached once the whole
-    * group is drafted. Fact checks share one sink, so they run one at a time as well. */
+  /** Writes the next chapters together, up to the book's concurrency, then checks them against
+    * the guide and each other before the next group starts. Fact checks and the continuity
+    * editor each share one sink, so they run one at a time. */
   private def chapterBatch(
     outline: BookOutline,
     done: List[WrittenChapter],
@@ -332,17 +339,20 @@ final class BookSession private[web] (
     for {
       _      <- setPhase(BookPhase.Generating(outline, done, batch.head, rest, RunMode.RunAll, notes, batch.tail))
       refs   <- refsRef.get
+      memory <- writerMemory(done)
       drafts <- ZIO
                   .foreachPar(batch) { plan =>
                     val ending = if (plan == batch.head) prevEnding else None
-                    Stages.writeChapter(app, writer, cfg, outline, plan.number - 1, ending, notes, None, refs)
+                    Stages.writeChapter(app, writer, cfg, outline, plan.number - 1, ending, notes, None, refs, memory)
                       .tap(_ => log(s"Chapter ${plan.number} drafted"))
                       .map(draft => plan -> draft)
                   }
                   .withParallelism(cfg.concurrency)
-      written <- ZIO.foreach(drafts) { case (plan, draft) =>
-                   attachContinuity(draft) *> scholarRefine(outline, WrittenChapter(plan, draft.text))
+      refined <- ZIO.foreach(drafts) { case (plan, draft) =>
+                   scholarRefine(outline, done, WrittenChapter(plan, draft.text))
                  }
+      _      <- setPhase(BookPhase.Generating(outline, done, batch.head, rest, RunMode.RunAll, notes, batch.tail, BookPhase.Checking))
+      written <- groupCheck(outline, done, refined, notes, refs)
       next   <- chapterLoop(outline, done ++ written, rest, RunMode.RunAll, notes)
     } yield next
   }
@@ -355,7 +365,7 @@ final class BookSession private[web] (
     mode: RunMode,
     notes: List[String]
   ): ZIO[Any, Throwable, List[WrittenChapter]] =
-    if (mode == RunMode.RunAll) chapterLoop(outline, done :+ wc, remaining, mode, notes)
+    if (mode == RunMode.RunAll) recordLedger(outline, done, wc) *> chapterLoop(outline, done :+ wc, remaining, mode, notes)
     else reviewGate(outline, done, wc, remaining, notes)
 
   private def reviewGate(
@@ -371,9 +381,11 @@ final class BookSession private[web] (
           rewriteWithFeedback(outline, done, wc, remaining, notes, comment)
       case Gate.ChapterApprove(comment) =>
         log(s"Chapter ${wc.plan.number} approved") *>
+          recordLedger(outline, done, wc) *>
           chapterLoop(outline, done :+ wc, remaining, RunMode.StepByStep, notes ++ comment.toList)
       case Gate.ChapterApproveRest(comment) =>
         log("Remaining chapters pre-approved") *>
+          recordLedger(outline, done, wc) *>
           chapterLoop(outline, done :+ wc, remaining, RunMode.RunAll, notes ++ comment.toList)
       case _ =>
         reviewGate(outline, done, wc, remaining, notes)
@@ -391,10 +403,122 @@ final class BookSession private[web] (
     val prevEnding = done.lastOption.map(_.endingExcerpt())
     for {
       refs  <- refsRef.get
-      draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, Some(comment), refs)
+      memory <- writerMemory(done)
+      draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, Some(comment), refs, memory, Some(wc.text))
       wc2    = WrittenChapter(wc.plan, draft.text)
       next  <- reviewGate(outline, done, wc2, remaining, notes)
     } yield next
+  }
+
+  // ---- continuity stages ------------------------------------------------------
+
+  def setContinuity(memory: ContinuityMemory): UIO[Unit] = memoryRef.set(memory)
+
+  private def writerMemory(written: List[WrittenChapter]): UIO[String] =
+    memoryRef.get.map(_.forWriter(written, cfg.scholar))
+
+  /** Shows the book as being prepared, so the approved outline no longer looks like it awaits review. */
+  private def preparing(outcome: TocOutcome): UIO[Unit] =
+    outcome.outline.chapters match {
+      case first :: rest =>
+        setPhase(BookPhase.Generating(outcome.outline, Nil, first, rest, outcome.mode, outcome.notes, Nil, BookPhase.Preparing))
+      case Nil => ZIO.unit
+    }
+
+  /** Decides the shared details before any chapter exists. Without a guide the book still gets
+    * the outline and the ledger, so a failure here does not stop it. */
+  private def bibleStage(outline: BookOutline, notes: List[String]): UIO[Unit] =
+    log(s"Writing the ${guideName}") *>
+      Stages.storyBible(app, continuity, outline, cfg, notes).foldZIO(
+        e => log(s"Could not write the $guideName (${clip(e.getMessage, 80)}); continuing with the outline only"),
+        bible => memoryRef.update(_.copy(bible = bible)) *> persist *> log(s"${guideName.capitalize} ready")
+      )
+
+  private def guideName: String = if (cfg.scholar) "consistency guide" else "story bible"
+
+  private def applyReport(report: ContinuityReport, chapters: String): UIO[Unit] =
+    memoryRef.update(_.withEntries(report.entries)) *> persist *>
+      report.failure.fold(ZIO.unit: UIO[Unit]) { reason =>
+        log(s"Could not read chapter(s) $chapters for the ledger (${clip(reason, 80)}); later chapters get its synopsis and ending")
+      }
+
+  /** Records a chapter that is final: approved in review, or written without review. */
+  private def recordLedger(outline: BookOutline, done: List[WrittenChapter], wc: WrittenChapter): UIO[Unit] =
+    memoryRef.get
+      .flatMap(memory => Stages.continuityPass(app, continuity, outline, memory, done, List(wc), check = false, cfg.scholar))
+      .flatMap(applyReport(_, wc.plan.number.toString))
+
+  /** Reads a drafted group, repairs what contradicts the guide or an earlier chapter (one round),
+    * and records what the final text established. Any failure keeps the drafts and the book. */
+  private def groupCheck(
+    outline: BookOutline,
+    done: List[WrittenChapter],
+    group: List[WrittenChapter],
+    notes: List[String],
+    refs: List[bookwriter.Reference]
+  ): UIO[List[WrittenChapter]] = {
+    val numbers = group.map(_.plan.number).mkString(", ")
+    for {
+      _      <- log(s"Checking continuity of chapter(s) $numbers")
+      memory <- memoryRef.get
+      report <- Stages.continuityPass(app, continuity, outline, memory, done, group, check = true, cfg.scholar)
+      _      <- applyReport(report, numbers)
+      fixed  <- repairIssues(outline, done, group, report.issues, notes, refs)
+      _      <- report.failure.fold(log(s"Chapter(s) $numbers: ${report.issues.size} continuity issue(s) found"))(_ => ZIO.unit)
+    } yield fixed
+  }
+
+  private def repairIssues(
+    outline: BookOutline,
+    done: List[WrittenChapter],
+    group: List[WrittenChapter],
+    issues: List[ContinuityIssue],
+    notes: List[String],
+    refs: List[bookwriter.Reference]
+  ): UIO[List[WrittenChapter]] =
+    if (issues.isEmpty) ZIO.succeed(group)
+    else
+      for {
+        _      <- ZIO.foreachDiscard(issues)(i => log(s"Continuity issue in chapter ${i.chapter}: ${clip(i.problem, 140)}"))
+        memory <- memoryRef.get
+        byChapter = issues.groupBy(_.chapter)
+        repaired <- ZIO
+                      .foreachPar(group.zipWithIndex) { case (wc, position) =>
+                        byChapter.get(wc.plan.number) match {
+                          case None         => ZIO.succeed(wc -> false)
+                          case Some(found)  =>
+                            val before = memory.forWriter(done ++ group.take(position), cfg.scholar)
+                            repairChapter(outline, wc, found, notes, refs, before)
+                        }
+                      }
+                      .withParallelism(cfg.concurrency)
+        changed = repaired.collect { case (wc, true) => wc }
+        _ <- ZIO.foldLeft(changed)(()) { (_, wc) =>
+               val earlier = done ++ repaired.map(_._1).filter(_.plan.number < wc.plan.number)
+               recordLedger(outline, earlier, wc)
+             }
+      } yield repaired.map(_._1)
+
+  /** A reply much shorter than the draft is a patch or a summary, not the chapter, so the draft stays. */
+  private def repairChapter(
+    outline: BookOutline,
+    wc: WrittenChapter,
+    issues: List[ContinuityIssue],
+    notes: List[String],
+    refs: List[bookwriter.Reference],
+    memory: String
+  ): UIO[(WrittenChapter, Boolean)] = {
+    val number = wc.plan.number
+    Stages
+      .writeChapter(app, writer, cfg, outline, number - 1, None, notes, Some(Briefs.continuityRevision(issues)), refs, memory, Some(wc.text))
+      .map(draft => WrittenChapter(wc.plan, draft.text))
+      .foldZIO(
+        e => log(s"Could not repair chapter $number (${clip(e.getMessage, 80)}); keeping the draft").as(wc -> false),
+        fixed =>
+          if (fixed.wordCount * 2 < wc.wordCount)
+            log(s"Repair of chapter $number came back too short; keeping the draft").as(wc -> false)
+          else log(s"Repaired chapter $number").as(fixed -> true)
+      )
   }
 
   // ---- scholar stages ---------------------------------------------------------
@@ -416,7 +540,7 @@ final class BookSession private[web] (
 
   /** Stage S2: per-section fact cross-check with one automatic repair round when the
     * FactChecker flags major problems. Accumulates findings for the final report. */
-  private def scholarRefine(outline: BookOutline, wc: WrittenChapter): ZIO[Any, Throwable, WrittenChapter] =
+  private def scholarRefine(outline: BookOutline, done: List[WrittenChapter], wc: WrittenChapter): ZIO[Any, Throwable, WrittenChapter] =
     scholar match {
       case None => ZIO.succeed(wc)
       case Some(sg) =>
@@ -432,7 +556,7 @@ final class BookSession private[web] (
                   case None => findingsRef.update(_ ++ findings).as(wc)
                   case Some(revision) =>
                     log(s"Fact-check found ${problems.size} problem(s); repairing section ${wc.plan.number}") *>
-                      Stages.writeChapter(app, writer, cfg, outline, wc.plan.number - 1, None, Nil, Some(revision), refs)
+                      writerMemory(done).flatMap(memory => Stages.writeChapter(app, writer, cfg, outline, wc.plan.number - 1, None, Nil, Some(revision), refs, memory, Some(wc.text)))
                         .flatMap { draft =>
                           val repaired = WrittenChapter(wc.plan, draft.text)
                           Stages.factCheck(app, sg.factChecker, sg.factSink, outline, repaired, refs)
@@ -517,9 +641,9 @@ final class BookSession private[web] (
   /** Checkpoints the session to disk (output/books/<id>/session.json) so the book
     * list, chapters and review gates survive server restarts. */
   def persist: UIO[Unit] =
-    refsRef.get.flatMap { refs =>
+    refsRef.get.zip(memoryRef.get).flatMap { case (refs, memory) =>
       stateRef.get.flatMap { v =>
-        SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt, refs))
+        SessionStore.save(SessionStore.snapshot(id, cfg, v.phase, v.events, startedAt, refs, memory))
       }
     }
 
@@ -549,10 +673,4 @@ final class BookSession private[web] (
         b.copy(title = ce.title.getOrElse(b.title), synopsis = ce.synopsis.getOrElse(b.synopsis))
       }
     }.sortBy(_.number).zipWithIndex.map { case (c, i) => c.copy(number = i + 1) }
-
-  private def attachContinuity(draft: ChapterDraft): UIO[Unit] =
-    app.getExecutor
-      .materialiseOutput(writer, draft.text, draft.context)
-      .flatMap(node => app.connectContext(writer, node, weight = Some(0.95)).unit)
-      .catchAll(_ => ZIO.unit)
 }

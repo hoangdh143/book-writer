@@ -16,7 +16,7 @@ object BookPipeline {
       outlineSink = new OutlineSink
       editorSink  = new EditorSink
       graph   <- BookGraph.build(store, cfg, outlineSink, editorSink)
-      (app, architect, writer, editor, scholar) = graph
+      (app, architect, writer, editor, scholar, _) = graph
       _       <- ZIO.succeed(app.getExecutor.addEventHook(progressHook()))
       outline <- Stages.plan(app, architect, outlineSink, cfg)
       _       <- reportPlan(outline, cfg)

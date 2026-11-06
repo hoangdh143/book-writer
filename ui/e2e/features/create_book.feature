@@ -119,6 +119,25 @@ Feature: Create a new book
     Then the panel says "Writing chapters 3–5 of 6…"
     And chapters 3, 4 and 5 are marked as writing
 
+  Scenario: A group being checked is shown as such
+    Given a book is checking chapters 3 to 5
+    Then the panel says "Checking continuity of chapters 3–5 of 6…"
+    And 3 chapters are marked "Checking…"
+
+  Scenario: The story bible is shown while it is being written
+    Given a book is preparing its story bible
+    Then the panel says "Writing the story bible…"
+    And 0 chapters are marked "Writing…"
+
+  Scenario: The story bible can be read on the book's page
+    Given a book with a story bible is open
+    When the user opens the story bible
+    Then the story bible shows "Mara Voss, lighthouse keeper"
+
+  Scenario: A book without a story bible does not offer one
+    Given a completed book is open
+    Then no story bible is offered
+
   Scenario: Ticking Diagrams asks for them on the new book
     When the user writes the idea "A guide to compilers"
     And the user ticks "Diagrams"

@@ -6,6 +6,7 @@ import { useUiStore } from '../store/uiStore'
 import { useCompletedCache } from '../store/completedCache'
 import { BookHeader } from './BookHeader'
 import { StatusSwitch } from './StatusSwitch'
+import { StoryBible } from './StoryBible'
 import { EventsFeed } from './EventsFeed'
 import { ErrorPanel } from './ErrorPanel'
 
@@ -16,6 +17,7 @@ const BookView = ({ book }: { book: Book }) => (
   <section>
     <BookHeader book={book} />
     <StatusSwitch book={book} />
+    <StoryBible book={book} />
     <EventsFeed events={book.events} />
   </section>
 )

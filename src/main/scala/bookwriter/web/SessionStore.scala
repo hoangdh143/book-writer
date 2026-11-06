@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{BookOutline, ChapterPlan, Config, Reference, WrittenChapter}
+import bookwriter.{BookOutline, ChapterPlan, Config, ContinuityMemory, Reference, WrittenChapter}
 import zio.UIO
 import zio.json.JsonCodec
 import zio.json._
@@ -78,7 +78,8 @@ final case class PersistedSession(
   phase: PersistedPhase,
   events: List[(Long, String)],
   startedAtMs: Long,
-  references: List[Reference] = Nil
+  references: List[Reference] = Nil,
+  continuity: ContinuityMemory = ContinuityMemory()
 ) derives JsonCodec
 
 object SessionStore:
@@ -93,7 +94,8 @@ object SessionStore:
     phase: BookPhase,
     events: List[(Instant, String)],
     startedAt: Instant,
-    references: List[Reference]
+    references: List[Reference],
+    continuity: ContinuityMemory
   ): PersistedSession =
     val persistedCfg = PersistedConfig(
       prompt = cfg.prompt,
@@ -115,14 +117,15 @@ object SessionStore:
       phase = toPersisted(phase),
       events = events.map { case (at, msg) => (at.toEpochMilli, msg) },
       startedAtMs = startedAt.toEpochMilli,
-      references = references
+      references = references,
+      continuity = continuity
     )
 
   def toPersisted(phase: BookPhase): PersistedPhase = phase match
     case BookPhase.Planning                                 => PersistedPhase.PPlanning()
     case BookPhase.TocReview(outline, revision)             => PersistedPhase.PTocReview(outline, revision)
-    case BookPhase.Generating(o, w, c, r, mode, notes, alongside) =>
-      PersistedPhase.PGenerating(o, w, c, r, mode.label, notes, alongside)
+    case g: BookPhase.Generating                            =>
+      PersistedPhase.PGenerating(g.outline, g.written, g.current, g.remaining, g.mode.label, g.notes, g.alongside)
     case BookPhase.ChapterReview(o, w, pending, r, notes)   =>
       PersistedPhase.PChapterReview(o, w, pending, r, notes)
     case BookPhase.Editing(o, w)                            => PersistedPhase.PEditing(o, w)

@@ -111,9 +111,13 @@ docker compose up --build -d    # then open http://localhost:8090
   provider returns rate-limit errors. `LLM_MAX_CONCURRENCY` sets the starting value until one is saved in
   Settings, which then takes priority. The CLI is not limited by this setting.
 - **Chapters at once:** set per book on the New book form (1–10, default 1). Above 1, chapters you don't
-  review individually are written in groups of that size, and each group finishes before the next starts.
-  Chapters in a group can't read each other, so they rely on the outline for continuity; later groups see
-  the earlier chapters. Chapter-by-chapter review always writes one at a time.
+  review individually are written in groups of that size. Chapters in a group can't read each other, so each
+  group is checked for contradictions and repaired before the next one starts. Chapter-by-chapter review
+  always writes one at a time.
+- **Consistency:** after you approve the outline, one model call writes a story bible (a consistency guide in
+  Scholar mode) that you can read on the book's page. Every writing call gets it, along with a ledger of what
+  the finished chapters established, so the app needs one extra call per finished chapter or group. Repairs are
+  automatic and listed in the book's activity log, and a failed check or repair never stops the book.
 - **Cover images:** every EPUB export gets an AI-generated cover based on the book's outline. It is
   generated once per book through an OpenAI-compatible images/generations endpoint
   (`IMAGE_BASE_URL`, default OpenAI's) with model `IMAGE_MODEL` (default `gpt-image-2.6-sunburst`) and key from

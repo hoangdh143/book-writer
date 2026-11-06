@@ -32,6 +32,7 @@ const bookSchema = z.object({
   model: z.string(),
   status: z.string(),
   scholar: z.boolean().nullish(),
+  storyBible: z.string().nullish(),
   writtenCount: z.number().int(),
   totalChapters: z.number().int(),
   outline: outlineSchema.nullish(),

@@ -85,6 +85,7 @@ final case class BookDto(
   writtenCount: Int,
   totalChapters: Int,
   scholar: Option[Boolean] = None,
+  storyBible: Option[String] = None,
   outline: Option[OutlineDto] = None,
   chapters: List[ChapterStatusDto] = Nil,
   currentChapter: Option[Int] = None,

@@ -19,6 +19,55 @@ object Prompts {
   double quotes around any label containing punctuation. On the next line write its caption in the form
   `*Figure: what it shows*`."""
 
+  def storyBibleWriter(cfg: Config): String = {
+    val sections =
+      if (cfg.scholar)
+        """- Terminology: each key term, its exact definition and spelling
+- Notation: symbols, abbreviations and units
+- Positions: the claims the paper commits to, so no section argues against them
+- Style: voice, tense and citation habits
+- Hand-offs: for every section, one line each on what it opens from and what it must leave established"""
+      else
+        """- Characters: full name, role, age, looks, voice, relationships and what they know when the book starts
+- Places: exact names and the details that must stay the same
+- Terms: invented words, organisations, devices and rules of the world, or key terms for non-fiction
+- Timeline: when each chapter happens and how long the story spans
+- Style: point of view, tense and tone
+- Hand-offs: for every chapter, one line each on the state it opens from and the state it must end on, so a
+  chapter can be written before its neighbour exists"""
+    s"""You write the shared guide that keeps a ${if (cfg.scholar) "research paper" else "book"} consistent. Several
+writers will work on different parts at the same moment without seeing each other's text, so anything you leave
+open will be invented differently by each of them. Decide those details now.
+
+Write in the same language as the book, with these sections:
+$sections
+
+Stay faithful to the plan and never contradict it. Be specific and brief: at most 1500 words, with no prose
+samples. Call `record_story_bible` exactly once with the whole guide as `text`, then reply with one line."""
+  }
+
+  def continuityEditor(cfg: Config): String =
+    s"""You are the ContinuityEditor of a ${if (cfg.scholar) "research paper" else "book"}. You read finished chapters and
+record what they actually established, for writers who will never see their full text.
+
+For EVERY chapter you are given, call `record_chapter_facts` once:
+- summary: 2-3 sentences on what happens or is argued, including how it ends
+- facts: up to 10 short, specific statements later chapters must respect, one per line, such as names,
+  relationships, injuries, who knows what, where things are, dates and decisions. Only what this text establishes.
+  Skip atmosphere.
+
+When asked to check, also call `record_issue` once for each real contradiction: between a chapter and the guide,
+with an earlier chapter, between chapters you were given, or where a chapter's opening does not follow from how the
+previous chapter ended.
+- chapter: the chapter that must change. The guide wins over any chapter; otherwise the earlier chapter is
+  correct and the later one must change. Name only chapters you were given.
+- problem: what conflicts, quoting the conflicting detail on both sides
+- fix: the smallest change that resolves it
+
+Report only contradictions a reader would notice. Differences of style, foreshadowing and things a later chapter
+legitimately adds or changes through events are not issues. Finding nothing is a normal result. Reply with one
+line when you are done."""
+
   def scholarArchitect(cfg: Config): String =
     s"""You are the ResearchArchitect, the chief planner of an academic research paper. The user gives
 you a research topic or question; you design the complete paper: title, field, abstract and a
@@ -62,7 +111,8 @@ Rules:
   either omit the claim or present it explicitly as speculation ("we hypothesize...").
 - Structure prose with occasional ### subheadings, definitions and concrete examples where useful.
 - Continuity: keep terminology, notation and claims consistent with the plan and with earlier
-  sections provided as context; never contradict what was already established.
+  sections provided as context; never contradict what was already established. A CONSISTENCY GUIDE or
+  THE PAPER SO FAR in your assignment is authoritative.
 - If a REVISED REFERENCES note appears in the assignment, the reference numbering may have changed —
   use exactly that numbering.
 - If this is the final section, close the paper with conclusions and stated limitations."""
@@ -160,6 +210,8 @@ Rules:
 - Non-fiction: clear structure with occasional ### subheadings, concrete examples, actionable insight.
 - Continuity: keep names, places, terminology and facts consistent with the plan; if an ending passage of
   the previous chapter is provided, flow naturally out of it without repeating it.
+- A STORY BIBLE or THE STORY SO FAR in your assignment is authoritative: use its names, facts and hand-offs
+  exactly, and introduce anything new so that it fits them.
 - The "Relevant Context" section may contain chapters written earlier in this book. Treat them as the
   authoritative story-so-far: reuse exactly the same names for every character, place, device and
   organisation that appears in them, and never contradict established events.

@@ -11,6 +11,11 @@ object Briefs {
     if (refs.isEmpty) "" else
       s"\n\nREFERENCE LIST (cite ONLY these, by bracketed number):\n${refs.map(_.format).mkString("\n")}"
 
+  private def draftBlock(draft: Option[String]): String =
+    draft.fold("") { d =>
+      s"\n\nCURRENT DRAFT (revise this; keep whatever the request does not touch):\n\"\"\"\n${d.trim}\n\"\"\""
+    }
+
   /** Everything up to (and excluding) the final "write now" instruction. */
   private def chapterBody(
     outline: BookOutline,
@@ -20,7 +25,9 @@ object Briefs {
     notes: List[String],
     revision: Option[String],
     withClosing: Boolean,
-    refs: List[Reference] = Nil
+    refs: List[Reference] = Nil,
+    memory: String = "",
+    draft: Option[String] = None
   ): String = {
     val plan = outline.chapters
     val ch = plan(idx)
@@ -38,7 +45,7 @@ object Briefs {
     val rewrite = revision.map { r =>
       s"\n\nREVISION REQUEST — the author reviewed a previous draft of this chapter and asked:\n\"\"\"\n$r\n\"\"\"\n" +
       "Rewrite the full chapter incorporating this feedback."
-    }.getOrElse("")
+    }.getOrElse("") + draftBlock(draft)
 
     s"""Book: "${outline.title}" (genre: ${outline.genre})
 Premise: ${outline.premise}
@@ -46,7 +53,7 @@ Premise: ${outline.premise}
 FULL CHAPTER PLAN:
 $toc
 
-YOUR ASSIGNMENT — write Chapter ${ch.number}: "${ch.title}" in full.
+${memory}YOUR ASSIGNMENT — write Chapter ${ch.number}: "${ch.title}" in full.
 Chapter synopsis: ${ch.synopsis}$prev$ending$opening$closing${authorNotesBlock(notes)}$rewrite${referencesBlock(refs)}"""
   }
 
@@ -79,9 +86,11 @@ $manuscript"""
     cfg: Config,
     notes: List[String] = Nil,
     revision: Option[String] = None,
-    refs: List[Reference] = Nil
+    refs: List[Reference] = Nil,
+    memory: String = "",
+    draft: Option[String] = None
   ): String =
-    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = true, refs = refs) +
+    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = true, refs = refs, memory = memory, draft = draft) +
       s"""
 
 Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."""
@@ -95,9 +104,11 @@ Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."
     notes: List[String],
     revision: Option[String],
     totalParts: Int,
-    refs: List[Reference] = Nil
+    refs: List[Reference] = Nil,
+    memory: String = "",
+    draft: Option[String] = None
   ): String =
-    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = false, refs = refs) +
+    chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = false, refs = refs, memory = memory, draft = draft) +
       s"""
 
 This chapter will be written in $totalParts consecutive parts, appended in order. You are writing Part 1 of
@@ -113,9 +124,13 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
     totalParts: Int,
     cfg: Config,
     notes: List[String] = Nil,
-    refs: List[Reference] = Nil
+    refs: List[Reference] = Nil,
+    memory: String = "",
+    revision: Option[String] = None,
+    draft: Option[String] = None
   ): String = {
     val ch = outline.chapters(idx)
+    val rewrite = revision.fold("")(r => s"\n\nREVISION REQUEST — apply this to the whole chapter:\n\"\"\"\n$r\n\"\"\"") + draftBlock(draft)
     val tail = soFar.split("\\s+").filter(_.nonEmpty).takeRight(700).mkString(" ")
     val lastPart = part == totalParts
     val closing =
@@ -129,8 +144,8 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
     s"""Book: "${outline.title}" (genre: ${outline.genre})
 Premise: ${outline.premise}
 
-YOUR ASSIGNMENT — continue Chapter ${ch.number}: "${ch.title}" (Part $part of $totalParts).
-Chapter synopsis: ${ch.synopsis}${authorNotesBlock(notes)}$closing${referencesBlock(refs)}
+${memory}YOUR ASSIGNMENT — continue Chapter ${ch.number}: "${ch.title}" (Part $part of $totalParts).
+Chapter synopsis: ${ch.synopsis}${authorNotesBlock(notes)}$closing$rewrite${referencesBlock(refs)}
 
 TEXT SO FAR (ends mid-chapter; continue EXACTLY from where it stops):
 \"\"\"
@@ -140,6 +155,52 @@ TEXT SO FAR (ends mid-chapter; continue EXACTLY from where it stops):
 Write ONLY the continuation now (markdown, about $partTarget more words toward the chapter's
 ${cfg.wordsPerChapter}-word target): pick up seamlessly where the text above stops. Do not repeat, restate or
 re-summarize anything already written."""
+  }
+
+  // ---- continuity briefs ------------------------------------------------------
+
+  def bibleInput(outline: BookOutline, cfg: Config, notes: List[String]): String =
+    s"""Book: "${outline.title}" (genre: ${outline.genre})
+Premise: ${outline.premise}
+
+THE AUTHOR'S REQUEST:
+${cfg.prompt}
+
+APPROVED CHAPTER PLAN:
+${outline.chapters.map(c => s"${c.number}. ${c.title} — ${c.synopsis}").mkString("\n")}${authorNotesBlock(notes)}
+
+Write and record the guide now."""
+
+  def continuityInput(
+    outline: BookOutline,
+    memory: String,
+    before: Option[WrittenChapter],
+    group: List[WrittenChapter],
+    check: Boolean
+  ): String = {
+    val preceding = before.fold("") { wc =>
+      s"THE CHAPTER BEFORE THIS GROUP (${wc.plan.number}. ${wc.plan.title}) ENDED WITH:\n\"\"\"\n${wc.endingExcerpt()}\n\"\"\"\n\n"
+    }
+    val chapters = group.map(c => s"## Chapter ${c.plan.number}: ${c.plan.title}\n\n${c.text.trim}").mkString("\n\n---\n\n")
+    val numbers = group.map(_.plan.number).mkString(", ")
+    val task =
+      if (check) s"Call `record_chapter_facts` for chapters $numbers, and `record_issue` for every real contradiction."
+      else s"Call `record_chapter_facts` for chapter $numbers. Do not call `record_issue` in this pass."
+    s"""Book: "${outline.title}" (genre: ${outline.genre})
+
+${memory}$preceding
+CHAPTERS TO READ:
+$chapters
+
+$task"""
+  }
+
+  /** The revision request the writer sees when a chapter contradicts the guide or earlier chapters. */
+  def continuityRevision(issues: List[ContinuityIssue]): String = {
+    val lines = issues.map(i => s"- ${i.problem}${if (i.fix.isEmpty) "" else s" Fix: ${i.fix}"}").mkString("\n")
+    s"""CONTINUITY REPORT — this chapter contradicts the guide or an earlier chapter. Fix exactly these problems:
+$lines
+Return the complete chapter. Keep every passage these problems do not touch as close to word for word as you can."""
   }
 
   // ---- scholar briefs ---------------------------------------------------------

@@ -92,6 +92,29 @@ export const groupWritingBook: Book = makeBook({
   chapters: chapterStates(['written', 'written', 'writing', 'writing', 'writing', 'pending']),
 })
 
+export const groupCheckingBook: Book = makeBook({
+  status: 'generating',
+  outline: chapterPlans,
+  currentChapter: 3,
+  writtenCount: 2,
+  chapters: chapterStates(['written', 'written', 'checking', 'checking', 'checking', 'pending']),
+})
+
+export const preparingBook: Book = makeBook({
+  status: 'generating',
+  outline: chapterPlans,
+  currentChapter: 1,
+  chapters: chapterStates(['preparing', 'pending', 'pending', 'pending', 'pending', 'pending']),
+})
+
+export const bibleBook: Book = makeBook({
+  status: 'generating',
+  outline: chapterPlans,
+  currentChapter: 1,
+  storyBible: '## Characters\n- Mara Voss, lighthouse keeper\n<script>alert(1)</script>',
+  chapters: chapterStates(['writing', 'pending', 'pending', 'pending', 'pending', 'pending']),
+})
+
 export const chapterReviewBook: Book = makeBook({
   status: 'chapter_review',
   outline: chapterPlans,
