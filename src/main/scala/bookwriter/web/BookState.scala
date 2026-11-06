@@ -138,7 +138,7 @@ object BookMapper {
   private def fromWritten(written: List[WrittenChapter], n: Int): Option[ChapterTextDto] =
     written.find(_.plan.number == n).map(wc => ChapterTextDto(n, wc.plan.title, wc.text))
 
-  private def outlineOf(phase: BookPhase): Option[BookOutline] = phase match {
+  def outlineOf(phase: BookPhase): Option[BookOutline] = phase match {
     case BookPhase.Planning                        => None
     case BookPhase.TocReview(o, _)                 => Some(o)
     case BookPhase.Generating(o, _, _, _, _, _)    => Some(o)

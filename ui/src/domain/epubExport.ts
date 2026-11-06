@@ -68,26 +68,50 @@ ${sections.map(s => `    <li><a href="book.xhtml#${s.anchor}">${xmlEscape(s.titl
 </body>
 </html>`
 
-const contentOpf = (title: string, uuid: string, modified: string, fontNames: readonly string[]): string =>
-  `<?xml version="1.0" encoding="utf-8"?>
+const coverExtension = (mime: string): string =>
+  mime.includes('jpeg') ? 'jpg' : mime.includes('gif') ? 'gif' : mime.includes('webp') ? 'webp' : 'png'
+
+const contentOpf = (
+  title: string,
+  uuid: string,
+  modified: string,
+  extras: {
+    readonly fontNames: readonly string[]
+    readonly cover: { readonly file: string; readonly mime: string } | undefined
+  },
+): string => {
+  const { fontNames, cover } = extras
+  return `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="en">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="book-id">urn:uuid:${uuid}</dc:identifier>
     <dc:title>${xmlEscape(title)}</dc:title>
     <dc:language>en</dc:language>
-    <meta property="dcterms:modified">${modified}</meta>
+    <meta property="dcterms:modified">${modified}</meta>${cover === undefined ? '' : '\n    <meta name="cover" content="cover-image"/>'}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="css" href="styles.css" media-type="text/css"/>
-    <item id="book" href="book.xhtml" media-type="application/xhtml+xml"/>
+    <item id="book" href="book.xhtml" media-type="application/xhtml+xml"/>${cover === undefined ? '' : `\n    <item id="cover-image" href="${cover.file}" media-type="${cover.mime}" properties="cover-image"/>\n    <item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`}
 ${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type="font/woff2"/>`).join('\n')}
   </manifest>
   <spine>
-    <itemref idref="nav"/>
-    <itemref idref="book"/>
+${[...(cover === undefined ? [] : ['    <itemref idref="cover-page"/>']), '    <itemref idref="nav"/>', '    <itemref idref="book"/>'].join('\n')}
   </spine>
 </package>`
+}
+
+const coverXhtml = (file: string): string =>
+  `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>Cover</title>
+</head>
+<body style="margin:0;padding:0;text-align:center">
+<img src="${file}" alt="Cover" style="max-width:100%;max-height:100%"/>
+</body>
+</html>`
 
 const loadFonts = async (): Promise<readonly ZipEntry[]> =>
   Promise.all(
@@ -101,17 +125,46 @@ const loadFonts = async (): Promise<readonly ZipEntry[]> =>
     }),
   )
 
-export const buildEpub = async (markdown: string, baseName: string): Promise<Uint8Array> => {
+export interface CoverImage {
+  readonly mime: string
+  readonly bytes: Uint8Array
+}
+
+export const buildEpub = async (
+  markdown: string,
+  baseName: string,
+  cover?: CoverImage,
+): Promise<Uint8Array> => {
   const title = markdown.match(/^#\s+(.+)$/m)?.[1] ?? baseName
   const bodyHtml = withHeadingIds(await markdownToXmlHtml(markdown))
   const fonts = await loadFonts()
   const fontNames = fonts.map(f => f.name.replace('OEBPS/', ''))
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+  const coverFile = cover === undefined ? undefined : `cover.${coverExtension(cover.mime)}`
+  const coverMime = cover === undefined ? undefined : cover.mime.split(';')[0]?.trim() || 'image/png'
   const entries: readonly ZipEntry[] = [
     { name: 'mimetype', bytes: encode('application/epub+zip') },
     { name: 'META-INF/container.xml', bytes: encode(containerXml()) },
-    { name: 'OEBPS/content.opf', bytes: encode(contentOpf(title, crypto.randomUUID(), modified, fontNames)) },
+    {
+      name: 'OEBPS/content.opf',
+      bytes: encode(
+        contentOpf(
+          title,
+          crypto.randomUUID(),
+          modified,
+          {
+            fontNames,
+            cover:
+              coverFile === undefined || coverMime === undefined ? undefined : { file: coverFile, mime: coverMime },
+          },
+        ),
+      ),
+    },
     { name: 'OEBPS/nav.xhtml', bytes: encode(navXhtml(title, sectionTitles(markdown))) },
+    ...(cover === undefined || coverFile === undefined
+      ? []
+      : [{ name: `OEBPS/${coverFile}`, bytes: cover.bytes }]),
+    ...(cover === undefined ? [] : [{ name: 'OEBPS/cover.xhtml', bytes: encode(coverXhtml(coverFile ?? '')) }]),
     { name: 'OEBPS/book.xhtml', bytes: encode(xhtmlDocument(title, bodyHtml)) },
     { name: 'OEBPS/styles.css', bytes: encode(`${bookCss}\n${katexCss}`) },
     ...fonts,

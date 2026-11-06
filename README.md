@@ -110,6 +110,11 @@ docker compose up --build -d    # then open http://localhost:8090
   queue for a free slot. A change applies right away and is saved in `output/settings.json`. Lower it if your
   provider returns rate-limit errors. `LLM_MAX_CONCURRENCY` sets the starting value until one is saved in
   Settings, which then takes priority. The CLI is not limited by this setting.
+- **Cover images:** every EPUB export gets an AI-generated cover based on the book's outline. It is
+  generated once per book through an OpenAI-compatible images/generations endpoint
+  (`IMAGE_BASE_URL`, default OpenAI's) with model `IMAGE_MODEL` (default `gpt-image-1`) and key from
+  `IMAGE_API_KEY` (falls back to `OPENAI_API_KEY`). Without a key the book still exports, just without
+  a cover.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.

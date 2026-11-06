@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, EditorSink, Finding, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, CoverError, CoverGen, CoverImage, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -58,9 +58,11 @@ object BookSession {
       (app, architect, writer, editor, scholar) = graph
       stateRef    <- Ref.make(SessionView(phase, None, events))
       fiberRef    <- Ref.make[Option[Fiber[Nothing, Unit]]](None)
-      refsRef     <- Ref.make[List[Reference]](Nil)
-      findingsRef <- Ref.make[List[Finding]](Nil)
-      reviewRef   <- Ref.make[Option[ReviewReport]](None)
+       refsRef     <- Ref.make[List[Reference]](Nil)
+       findingsRef <- Ref.make[List[Finding]](Nil)
+       reviewRef   <- Ref.make[Option[ReviewReport]](None)
+       coverRef    <- Ref.make[Option[CoverImage]](None)
+       coverMutex  <- zio.Semaphore.make(1L)
     } yield {
       val session = new BookSession(
         id = id,
@@ -77,6 +79,8 @@ object BookSession {
         refsRef = refsRef,
         findingsRef = findingsRef,
         reviewRef = reviewRef,
+        coverRef = coverRef,
+        coverMutex = coverMutex,
         startedAt = startedAt
       )
       app.getExecutor.addEventHook(session.eventHook)
@@ -99,6 +103,8 @@ final class BookSession private[web] (
   refsRef: Ref[List[Reference]],
   findingsRef: Ref[List[Finding]],
   reviewRef: Ref[Option[ReviewReport]],
+  coverRef: Ref[Option[CoverImage]],
+  coverMutex: zio.Semaphore,
   startedAt: Instant
 ) {
 
@@ -115,6 +121,34 @@ final class BookSession private[web] (
 
   def chapterText(n: Int): UIO[Option[ChapterTextDto]] =
     stateRef.get.map(v => BookMapper.chapterText(v.phase, n))
+
+  def cover: UIO[Option[CoverImage]] = coverRef.get
+
+  /** Returns the cached cover, or generates one from the current outline and caches it.
+    * The mutex keeps concurrent requests from generating two covers. */
+  def ensureCover(settings: ImageSettings): IO[CoverError, CoverImage] =
+    coverRef.get.flatMap {
+      case Some(cached) => ZIO.succeed(cached)
+      case None         =>
+        coverMutex.withPermit {
+          coverRef.get.flatMap {
+            case Some(cached) => ZIO.succeed(cached)
+            case None         =>
+              stateRef.get.flatMap { v =>
+                BookMapper.outlineOf(v.phase) match {
+                  case None          => ZIO.fail(CoverError.NoOutline(v.phase.status))
+                  case Some(outline) =>
+                    log("Generating the cover image") *>
+                      CoverGen.generate(CoverGen.coverPrompt(outline), settings).tap { _ =>
+                        log("Cover image generated")
+                      }.tapError { error =>
+                        log(s"Cover generation failed (${clip(error.message, 80)})")
+                      }
+                  }
+              }.tap(cover => coverRef.set(Some(cover)))
+          }
+        }
+    }
 
   def start(): UIO[Unit] =
     persist *> sessionProcess.forkDaemon.flatMap(fiber => fiberRef.set(Some(fiber)))

@@ -44,6 +44,13 @@ final case class ChapterReviseRequest(comment: String) derives JsonCodec
 
 final case class ApproveRestRequest(comment: Option[String] = None) derives JsonCodec
 
+final case class CoverRequest(
+  imageBaseUrl: Option[String] = None,
+  imageApiKey: Option[String] = None,
+  imageModel: Option[String] = None,
+  size: Option[String] = None
+) derives JsonCodec
+
 // ---- responses ---------------------------------------------------------------
 
 final case class ChapterPlanDto(

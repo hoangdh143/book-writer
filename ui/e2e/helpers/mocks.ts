@@ -13,6 +13,22 @@ const json = async (route: Route, body: unknown, status = 200): Promise<void> =>
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 }
 
+// A 1x1 transparent PNG the server "generated" as a cover.
+const tinyPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+export const mockCoverApi = async (page: Page): Promise<void> => {
+  await page.route('**/api/books/b1/cover', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng })
+      return
+    }
+    await json(route, { error: 'book has no cover yet; POST to generate one' }, 404)
+  })
+}
+
 export const mockBookApi = async (page: Page, world: World): Promise<void> => {
   await page.route('**/api/books', async (route) => {
     const request = route.request()
@@ -72,6 +88,7 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
 
   await mockOpenRouterModels(page)
   await mockLmStudioModels(page)
+  await mockCoverApi(page)
 }
 
 export const mockOpenRouterModels = async (page: Page): Promise<void> => {

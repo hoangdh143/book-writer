@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { http, decodeWith } from './client'
+import { ApiError, http, decodeWith } from './client'
 import type { CreateBookInput, TocApproveInput } from './requests'
 import {
   bookSchema,
@@ -7,10 +7,53 @@ import {
   chapterTextSchema,
   createdBookSchema,
   okSchema,
+  apiErrorSchema,
 } from './types'
 
 const base = '/api/books'
 const bookPath = (id: string): string => `${base}/${encodeURIComponent(id)}`
+
+export interface CoverImage {
+  readonly mime: string
+  readonly bytes: Uint8Array
+}
+
+export interface CoverInput {
+  readonly imageBaseUrl?: string
+  readonly imageApiKey?: string
+  readonly imageModel?: string
+}
+
+const coverFromResponse = async (response: Response): Promise<CoverImage> => ({
+  mime: response.headers.get('content-type') ?? 'image/png',
+  bytes: new Uint8Array(await response.arrayBuffer()),
+})
+
+const coverError = async (response: Response): Promise<ApiError> => {
+  const raw: unknown = await response.json().catch(() => undefined)
+  const parsed = apiErrorSchema.safeParse(raw)
+  const message = parsed.success ? parsed.data.error : `Request failed (HTTP ${response.status})`
+  return new ApiError(message, response.status)
+}
+
+/** Returns the cached cover, or undefined when the book has none yet. */
+export const fetchCover = async (id: string): Promise<CoverImage | undefined> => {
+  const response = await fetch(`${bookPath(id)}/cover`)
+  if (response.status === 404) return undefined
+  if (!response.ok) throw await coverError(response)
+  return coverFromResponse(response)
+}
+
+/** Generates the cover (server-side, cached after the first call). */
+export const generateCover = async (id: string, input?: CoverInput): Promise<CoverImage> => {
+  const response = await fetch(`${bookPath(id)}/cover`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input ?? {}),
+  })
+  if (!response.ok) throw await coverError(response)
+  return coverFromResponse(response)
+}
 
 export const bookApi = {
   list: (): Promise<z.infer<typeof bookListItemSchema>[]> =>

@@ -306,10 +306,43 @@ Then('the epub embeds non-empty katex fonts', async ({ world }) => {
     const size = buf.readUInt32LE(p + 20)
     const name = buf.toString('utf8', p + 46, p + 46 + nameLen)
     if (name.endsWith('.woff2')) fonts.push({ name, size })
-    p += 46 + nameLen
+    p += 46 + nameLen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32)
   }
   expect(fonts.length).toBe(20)
   for (const font of fonts) expect(font.size).toBeGreaterThan(1000)
+})
+
+Then('the epub embeds a cover image', async ({ world }) => {
+  const download = world.download
+  expect(download).toBeDefined()
+  const buf = await readFile(await download!.path())
+  let eocd = -1
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+  }
+  expect(eocd).toBeGreaterThanOrEqual(0)
+  const count = buf.readUInt16LE(eocd + 10)
+  const names = new Set<string>()
+  const contents = new Map<string, string>()
+  let p = buf.readUInt32LE(eocd + 16)
+  for (let i = 0; i < count; i++) {
+    const nameLen = buf.readUInt16LE(p + 28)
+    const extraLen = buf.readUInt16LE(p + 30)
+    const commentLen = buf.readUInt16LE(p + 32)
+    const size = buf.readUInt32LE(p + 24)
+    const localOffset = buf.readUInt32LE(p + 42)
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen)
+    names.add(name)
+    const localNameLen = buf.readUInt16LE(localOffset + 26)
+    const localExtraLen = buf.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + localNameLen + localExtraLen
+    contents.set(name, buf.toString('utf8', dataStart, dataStart + size))
+    p += 46 + nameLen + extraLen + commentLen
+  }
+  expect(names.has('OEBPS/cover.png')).toBe(true)
+  expect(names.has('OEBPS/cover.xhtml')).toBe(true)
+  expect(contents.get('OEBPS/content.opf')).toContain('properties="cover-image"')
+  expect(contents.get('OEBPS/cover.xhtml')).toContain('src="cover.png"')
 })
 
 Then('the file contains {string}', async ({ world }, fragment) => {

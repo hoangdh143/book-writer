@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Config, LlmLimiter, LlmSettings}
+import bookwriter.{Config, CoverError, CoverImage, ImageSettings, LlmLimiter, LlmSettings}
 import zio.http.{Body, Headers, Method, Request, Response, Routes, Status, handler, string}
 import zio.json._
 import zio.ZIO
@@ -21,6 +21,8 @@ object BookRoutes {
       Method.DELETE / "api" / "books" / string("id") -> handler((id: String, _: Request) => withSession(registry, id)(removeBook(registry, id))),
       Method.GET / "api" / "books" / string("id") / "markdown" -> handler((id: String, _: Request) => withSession(registry, id)(bookMarkdown)),
       Method.GET / "api" / "books" / string("id") / "chapters" / string("n") -> handler((id: String, n: String, _: Request) => withSession(registry, id)(chapterText(n))),
+      Method.GET / "api" / "books" / string("id") / "cover" -> handler((id: String, _: Request) => withSession(registry, id)(cachedCover)),
+      Method.POST / "api" / "books" / string("id") / "cover" -> handler((id: String, req: Request) => withSession(registry, id)(s => decode[CoverRequest](req).flatMap(body => generateCover(s, body)))),
       Method.POST / "api" / "books" / string("id") / "toc" / "approve" -> handler((id: String, req: Request) => withSession(registry, id)(s => decode[TocApproveRequest](req).flatMap(body => action(s, s.approveToc(body))))),
       Method.POST / "api" / "books" / string("id") / "toc" / "revise" -> handler((id: String, req: Request) => withSession(registry, id)(s => decode[TocReviseRequest](req).flatMap(body => action(s, s.reviseToc(body))))),
       Method.POST / "api" / "books" / string("id") / "chapters" / "approve-rest" -> handler((id: String, req: Request) => withSession(registry, id)(s => decode[ApproveRestRequest](req).flatMap(body => action(s, s.approveRest(body.comment))))),
@@ -86,6 +88,32 @@ object BookRoutes {
   private def chapterNumber(raw: String): ZIO[Any, Response, Int] =
     ZIO.fromEither(
       raw.trim.toIntOption.toRight(json(Status.BadRequest, ApiErrorDto(s"'$raw' is not a chapter number").toJson))
+    )
+
+  private def cachedCover(session: BookSession): ZIO[Any, Response, Response] =
+    session.cover.flatMap {
+      case Some(c) => ZIO.succeed(coverResponse(c))
+      case None    =>
+        ZIO.fail(json(Status.NotFound, ApiErrorDto(s"book has no cover yet; POST to generate one").toJson))
+    }
+
+  private def generateCover(session: BookSession, body: CoverRequest): ZIO[Any, Response, Response] =
+    session
+      .ensureCover(ImageSettings.fromEnv(body.imageBaseUrl, body.imageApiKey, body.imageModel, body.size))
+      .foldZIO(
+        {
+          case CoverError.NoOutline(status) => ZIO.fail(json(Status.Conflict, ApiErrorDto(status).toJson))
+          case CoverError.MissingApiKey     => ZIO.fail(json(Status.BadRequest, ApiErrorDto(CoverError.MissingApiKey.message).toJson))
+          case error: CoverError.Upstream   => ZIO.fail(json(Status.BadGateway, ApiErrorDto(error.message).toJson))
+        },
+        cover => ZIO.succeed(coverResponse(cover))
+      )
+
+  private def coverResponse(cover: CoverImage): Response =
+    Response(
+      Status.Ok,
+      Headers("content-type", cover.mime) ++ Headers("cache-control", "no-store"),
+      Body.fromChunk(zio.Chunk.fromArray(cover.bytes))
     )
 
   // ---- combinators ---------------------------------------------------------------
