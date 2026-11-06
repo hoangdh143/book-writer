@@ -29,7 +29,7 @@ const htmlDocument = (title: string, bodyHtml: string): string =>
     '<head>',
     '<meta charset="utf-8">',
     `<title>${title}</title>`,
-    '<style>body{max-width:46rem;margin:2rem auto;padding:0 1rem;line-height:1.6;font-family:Georgia,serif;color:#1a1a1a}</style>',
+    '<style>body{max-width:46rem;margin:2rem auto;padding:0 1rem;line-height:1.6;font-family:Georgia,serif;color:#1a1a1a}img{max-width:100%}</style>',
     '</head>',
     '<body>',
     bodyHtml,
@@ -43,6 +43,7 @@ const stripMarkdown = (markdown: string): string =>
   markdown
     .replace(/<span data-bw-math="(\d+)"><\/span>/g, `${NUL}$1${NUL}`)
     .replace(/```[\s\S]*?```/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/[*_>#]+/g, '')

@@ -49,6 +49,10 @@
       @apply border-l-2 border-slate-600 pl-4 text-slate-300 italic;
     }
 
+    & img {
+      @apply max-w-full rounded-lg bg-white p-3;
+    }
+
     & ul {
       @apply list-disc pl-6;
     }

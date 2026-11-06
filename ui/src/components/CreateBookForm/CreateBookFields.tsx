@@ -1,6 +1,7 @@
 import { fieldLabel, growingText, hint, input } from '../../domain/uiClasses'
 import { FieldError } from '../FieldError'
 import { ModelFields } from './ModelFields'
+import { OptionCheckbox } from './OptionCheckbox'
 
 export interface FormValues {
   readonly prompt: string
@@ -10,6 +11,7 @@ export interface FormValues {
   readonly customModel: string
   readonly customBaseUrl: string
   readonly scholar: boolean
+  readonly diagrams: boolean
 }
 
 export const initialValues: FormValues = {
@@ -20,6 +22,7 @@ export const initialValues: FormValues = {
   customModel: '',
   customBaseUrl: '',
   scholar: false,
+  diagrams: false,
 }
 
 interface Props {
@@ -75,24 +78,18 @@ export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
       <FieldError message={errors.chapters ?? errors.wordsPerChapter} />
       <p className={hint}>{lengthEstimate(values)}</p>
     </div>
-    <div className="flex flex-col gap-1.5">
-      <label className={`${fieldLabel} flex items-start gap-2.5 font-normal`}>
-        <input
-          type="checkbox"
-          className="mt-1 size-4 accent-indigo-400"
-          checked={values.scholar}
-          onChange={(event) => onPatch({ scholar: event.target.checked })}
-        />
-        <span>
-          Scholar mode
-          <span className={`${hint} mt-0.5 block`}>
-            Produce a research paper instead of a book: a real bibliography with numbered
-            citations, per-section fact cross-checking with automatic repairs, and a
-            peer-review pass before assembly.
-          </span>
-        </span>
-      </label>
-    </div>
+    <OptionCheckbox
+      label="Scholar mode"
+      description="Produce a research paper instead of a book: a real bibliography with numbered citations, per-section fact cross-checking with automatic repairs, and a peer-review pass before assembly."
+      checked={values.scholar}
+      onChange={(scholar) => onPatch({ scholar })}
+    />
+    <OptionCheckbox
+      label="Diagrams"
+      description="Let the writer add diagrams where they help, such as flowcharts and sequence diagrams. They are drawn when the book is finished, so chapter review shows their source."
+      checked={values.diagrams}
+      onChange={(diagrams) => onPatch({ diagrams })}
+    />
     <ModelFields values={values} errors={errors} onPatch={onPatch} />
   </>
 )

@@ -53,3 +53,19 @@ Feature: Exporting a completed book
     When the user clicks "Clear saved keys"
     Then the cover image API key shows ""
     And the cover image model shows "gpt-image-2.6-flare"
+
+  Scenario: A rendered diagram is shown and a remote image stays blocked
+    Given a completed book with diagrams is open
+    Then the manuscript shows the diagram and blocks the remote image
+    And a diagram that was not rendered shows its source
+
+  Scenario: The EPUB packages diagrams as files
+    Given a completed book with diagrams is open
+    When the user downloads the export in format "EPUB (.epub)"
+    Then the epub packages the diagram as a file
+
+  Scenario: Plain text leaves diagram images out
+    Given a completed book with diagrams is open
+    When the user downloads the export in format "Plain text (.txt)"
+    Then the file has no image data
+    And the file contains "Figure: Keeper route"

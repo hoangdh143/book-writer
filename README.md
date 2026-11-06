@@ -116,6 +116,11 @@ docker compose up --build -d    # then open http://localhost:8090
   `IMAGE_API_KEY` (falls back to `OPENAI_API_KEY`). Settings in the web UI can set the key and model
   instead; they stay in the browser and win over the server's values. Without a key the book still
   exports, just without a cover.
+- **Diagrams:** Compose also runs a self-hosted [Kroki](https://kroki.io/) with its Mermaid companion, which
+  turn diagram text into images. They have no port on the host; the app reaches them at `KROKI_URL`
+  (`http://kroki:8000`). Tick **Diagrams** when creating a book to let the writer add them. They are
+  rendered when the book is assembled, so chapter review shows their source. A diagram that cannot be
+  rendered stays as source text and the book still completes.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.

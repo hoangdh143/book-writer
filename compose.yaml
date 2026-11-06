@@ -15,10 +15,31 @@ services:
       - OPENAI_API_KEY
       - LLM_MAX_CONCURRENCY
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      - KROKI_URL=http://kroki:8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - book-writer-output:/app/output
+
+  # Renders diagrams from text. Reachable only by the services in this file, with no port on the host.
+  kroki:
+    image: yuzutech/kroki:0.35.0
+    restart: unless-stopped
+    depends_on:
+      - kroki-mermaid
+    environment:
+      - KROKI_MERMAID_HOST=kroki-mermaid
+    expose:
+      - "8000"
+    tmpfs:
+      # Kroki's setup docs require the exec option when /tmp is mounted.
+      - /tmp:exec
+
+  kroki-mermaid:
+    image: yuzutech/kroki-mermaid:0.35.0
+    restart: unless-stopped
+    expose:
+      - "8002"
 
 volumes:
   book-writer-output:

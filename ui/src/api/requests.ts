@@ -27,4 +27,5 @@ export interface CreateBookInput {
   readonly baseUrl?: string
   readonly apiKey?: string
   readonly scholar?: boolean
+  readonly diagrams?: boolean
 }

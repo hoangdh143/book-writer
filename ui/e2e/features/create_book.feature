@@ -85,3 +85,14 @@ Feature: Create a new book
     And the user selects the model "Llama 3.3 70B Instruct"
     And the user clicks "Create book"
     Then the create request has api key "sk-or-test"
+
+  Scenario: Diagrams are off unless ticked
+    When the user writes the idea "A guide to bread"
+    And the user clicks "Create book"
+    Then the create request does not ask for diagrams
+
+  Scenario: Ticking Diagrams asks for them on the new book
+    When the user writes the idea "A guide to compilers"
+    And the user ticks "Diagrams"
+    And the user clicks "Create book"
+    Then the create request asks for diagrams

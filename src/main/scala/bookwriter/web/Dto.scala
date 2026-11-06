@@ -14,7 +14,8 @@ final case class CreateBookRequest(
   apiKey: Option[String] = None,
   temperature: Option[Double] = None,
   skipEditor: Option[Boolean] = None,
-  scholar: Option[Boolean] = None
+  scholar: Option[Boolean] = None,
+  diagrams: Option[Boolean] = None
 ) derives JsonCodec
 
 final case class ChapterEdit(

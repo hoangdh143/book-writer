@@ -7,6 +7,7 @@ import {
   chapterReviewBook,
   chapterTextV1,
   completedBook,
+  diagramBook,
   listItemFor,
   makeBook,
   planningBook,
@@ -55,6 +56,54 @@ Given('a completed book is open', async ({ page, world }) => {
   world.detailQueue = [completedBook]
   await mockBookApi(page, world)
   await openFromList(page, titleOf(completedBook))
+})
+
+Given('a completed book with diagrams is open', async ({ page, world }) => {
+  world.listItem = listItemFor(diagramBook)
+  world.detailQueue = [diagramBook]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(diagramBook))
+})
+
+When('the user ticks {string}', async ({ page }, label) => {
+  await page.getByRole('checkbox', { name: label }).check()
+})
+
+Then('the create request asks for diagrams', async ({ world }) => {
+  expect(world.createBook?.['diagrams']).toBe(true)
+})
+
+Then('the create request does not ask for diagrams', async ({ world }) => {
+  expect(world.createBook).toBeDefined()
+  expect(world.createBook?.['diagrams']).toBeUndefined()
+})
+
+Then('the manuscript shows the diagram and blocks the remote image', async ({ page }) => {
+  const images = page.locator('.manuscript img')
+  await expect(images).toHaveCount(1)
+  await expect(images).toHaveAttribute('alt', "Keeper's route")
+  await expect(images).toHaveAttribute('src', /^data:image\/png;base64,/)
+})
+
+Then('a diagram that was not rendered shows its source', async ({ page }) => {
+  await expect(page.locator('.manuscript code').filter({ hasText: 'not a diagram' })).toBeVisible()
+})
+
+Then('the epub packages the diagram as a file', async ({ world }) => {
+  const download = world.download
+  expect(download).toBeDefined()
+  const zip = await readFile(await download!.path())
+  const text = zip.toString('latin1')
+  expect(text).toContain('OEBPS/diagram-1.png')
+  expect(text).toContain('href="diagram-1.png" media-type="image/png"')
+  expect(text).toContain('src="diagram-1.png"')
+  expect(text).not.toContain('data:image/png;base64')
+})
+
+Then('the file has no image data', async ({ world }) => {
+  const download = world.download
+  expect(download).toBeDefined()
+  expect(await readFile(await download!.path(), 'utf8')).not.toContain('base64')
 })
 
 Given('a book with unsafe chapter text is open', async ({ page, world }) => {

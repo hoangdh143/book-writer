@@ -8,7 +8,16 @@ object Prompts {
 
   /** The chapter writer doubles as the academic section writer in scholar mode. */
   def writerPrompt(cfg: Config): String =
-    if (cfg.scholar) scholarWriter(cfg) else chapterWriter(cfg)
+    (if (cfg.scholar) scholarWriter(cfg) else chapterWriter(cfg)) + (if (cfg.diagrams) diagramRules else "")
+
+  private val diagramRules: String =
+    """
+- Diagrams: add one only where it explains a process, structure or relationship better than prose, and at
+  most one per assignment. Most passages need none, and narrative fiction rarely needs any. Write it as a
+  fenced code block tagged `mermaid` (flowchart, sequence, class, state or ER diagram) or `graphviz` (DOT),
+  never any other tag and never a markdown image. Keep it small: at most 15 nodes with short labels, and
+  double quotes around any label containing punctuation. On the next line write its caption in the form
+  `*Figure: what it shows*`."""
 
   def scholarArchitect(cfg: Config): String =
     s"""You are the ResearchArchitect, the chief planner of an academic research paper. The user gives

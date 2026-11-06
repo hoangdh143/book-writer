@@ -49,9 +49,17 @@ object BookPipeline {
         } yield fb
       _       <- banner("Stage 4/4 - Assembling the book")
       elapsed  = Duration.ofNanos(System.nanoTime() - started)
-      paths    = Assembler.save(cfg, Assembler.markdown(outline, chapters, foreword, blurb, cfg, elapsed), outline, chapters)
+      md      <- renderedDiagrams(Assembler.markdown(outline, chapters, foreword, blurb, cfg, elapsed), cfg)
+      paths    = Assembler.save(cfg, md, outline, chapters)
       _       <- ZIO.succeed(report(outline, chapters, paths))
     } yield ()
+
+  private def renderedDiagrams(markdown: String, cfg: Config): UIO[String] =
+    Diagrams.renderBook(markdown, cfg.diagrams).map { result =>
+      if (cfg.diagrams) println(s"  Diagrams: ${result.rendered} rendered, ${result.failures.size} left as source")
+      result.failures.foreach(reason => println(s"  ! diagram not rendered: $reason"))
+      result.markdown
+    }
 
   /** Scholar mode: bibliography, section writing with per-section fact cross-checking
     * (auto-repair of flagged claims), peer review with one revision round, then
@@ -99,7 +107,7 @@ object BookPipeline {
       }
       _    <- banner("Stage 5/5 - Assembling the paper")
       elapsed = Duration.ofNanos(System.nanoTime() - started)
-      md      = Assembler.scholarMarkdown(outline, finalChapters, refs, findings, finalReview, cfg, elapsed)
+      md     <- renderedDiagrams(Assembler.scholarMarkdown(outline, finalChapters, refs, findings, finalReview, cfg, elapsed), cfg)
       paths  <- ZIO.attempt(Assembler.save(cfg, md, outline, finalChapters, refs, findings, finalReview))
       _      <- ZIO.succeed(report(outline, finalChapters, paths))
     } yield ()

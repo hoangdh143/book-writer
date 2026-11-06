@@ -9,6 +9,7 @@ const bookCss = `body{line-height:1.6;font-family:Georgia,'Times New Roman',seri
 h1{text-align:center;font-size:1.8em;margin:1em 0}
 h2{font-size:1.3em;margin:1.8em 0 .6em}
 blockquote{color:#444;border-left:3px solid #ccc;margin:1em 0;padding:.2em 1em}
+img{max-width:100%}
 .katex-display{overflow-x:auto;overflow-y:hidden;padding:.3em 0}`
 
 const xmlEscape = (s: string): string =>
@@ -78,9 +79,10 @@ const contentOpf = (
   extras: {
     readonly fontNames: readonly string[]
     readonly cover: { readonly file: string; readonly mime: string } | undefined
+    readonly diagramNames: readonly string[]
   },
 ): string => {
-  const { fontNames, cover } = extras
+  const { fontNames, cover, diagramNames } = extras
   return `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="en">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -93,7 +95,7 @@ const contentOpf = (
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="css" href="styles.css" media-type="text/css"/>
     <item id="book" href="book.xhtml" media-type="application/xhtml+xml"/>${cover === undefined ? '' : `\n    <item id="cover-image" href="${cover.file}" media-type="${cover.mime}" properties="cover-image"/>\n    <item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`}
-${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type="font/woff2"/>`).join('\n')}
+${diagramNames.map((name, i) => `    <item id="diagram-${i}" href="${name}" media-type="image/png"/>\n`).join('')}${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type="font/woff2"/>`).join('\n')}
   </manifest>
   <spine>
 ${[...(cover === undefined ? [] : ['    <itemref idref="cover-page"/>']), '    <itemref idref="nav"/>', '    <itemref idref="book"/>'].join('\n')}
@@ -130,13 +132,29 @@ export interface CoverImage {
   readonly bytes: Uint8Array
 }
 
+/** Moves embedded diagram PNGs out of the text and into their own EPUB files. */
+const extractDiagrams = (markdown: string): { readonly text: string; readonly files: readonly ZipEntry[] } => {
+  // Splitting on a capture group leaves the base64 payloads at the odd positions.
+  const pieces = markdown.split(/\]\(data:image\/png;base64,([A-Za-z0-9+/=]+)\)/)
+  const diagramName = (position: number): string => `diagram-${(position + 1) / 2}.png`
+  return {
+    text: pieces.map((piece, i) => (i % 2 === 0 ? piece : `](${diagramName(i)})`)).join(''),
+    files: pieces.flatMap((piece, i) =>
+      i % 2 === 0
+        ? []
+        : [{ name: `OEBPS/${diagramName(i)}`, bytes: Uint8Array.from(atob(piece), (char) => char.charCodeAt(0)) }],
+    ),
+  }
+}
+
 export const buildEpub = async (
   markdown: string,
   baseName: string,
   cover?: CoverImage,
 ): Promise<Uint8Array> => {
   const title = markdown.match(/^#\s+(.+)$/m)?.[1] ?? baseName
-  const bodyHtml = withHeadingIds(await markdownToXmlHtml(markdown))
+  const diagrams = extractDiagrams(markdown)
+  const bodyHtml = withHeadingIds(await markdownToXmlHtml(diagrams.text))
   const fonts = await loadFonts()
   const fontNames = fonts.map(f => f.name.replace('OEBPS/', ''))
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
@@ -154,6 +172,7 @@ export const buildEpub = async (
           modified,
           {
             fontNames,
+            diagramNames: diagrams.files.map((file) => file.name.replace('OEBPS/', '')),
             cover:
               coverFile === undefined || coverMime === undefined ? undefined : { file: coverFile, mime: coverMime },
           },
@@ -167,6 +186,7 @@ export const buildEpub = async (
     ...(cover === undefined ? [] : [{ name: 'OEBPS/cover.xhtml', bytes: encode(coverXhtml(coverFile ?? '')) }]),
     { name: 'OEBPS/book.xhtml', bytes: encode(xhtmlDocument(title, bodyHtml)) },
     { name: 'OEBPS/styles.css', bytes: encode(`${bookCss}\n${katexCss}`) },
+    ...diagrams.files,
     ...fonts,
   ]
   return createZip(entries)

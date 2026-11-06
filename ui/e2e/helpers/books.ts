@@ -92,6 +92,26 @@ export const chapterReviewBook: Book = makeBook({
   chapters: chapterStates(['written', 'awaiting_review', 'pending', 'pending', 'pending', 'pending']),
 })
 
+// A 1x1 PNG, embedded the way the server embeds a rendered diagram.
+const diagramPng =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+export const diagramBook: Book = makeBook({
+  status: 'completed',
+  outline: chapterPlans,
+  writtenCount: 6,
+  chapters: chapterStates(['written', 'written', 'written', 'written', 'written', 'written']),
+  markdown: [
+    md,
+    `![Keeper's route](data:image/png;base64,${diagramPng})`,
+    '*Figure: Keeper route*',
+    '![tracker](https://example.com/pixel.png)',
+    '```mermaid\nnot a diagram\n```',
+  ].join('\n\n'),
+  markdownFiles: ['output/books/b1/book.md'],
+  elapsedSeconds: 3720,
+})
+
 export const completedBook: Book = makeBook({
   status: 'completed',
   outline: chapterPlans,

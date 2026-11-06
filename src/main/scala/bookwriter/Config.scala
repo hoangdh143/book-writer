@@ -15,6 +15,7 @@ final case class Config(
   temperature: Double = 0.8,
   skipEditor: Boolean = false,
   scholar: Boolean = false,
+  diagrams: Boolean = false,
   debug: Boolean = false,
   serve: Boolean = false
 )
@@ -82,6 +83,8 @@ object Config {
       |  --scholar             Scholar mode: produce a research paper with a bibliography,
       |                        inline citations, per-section fact cross-checking and a
       |                        peer-review pass before assembly
+      |  --diagrams            Let the writer add Mermaid and GraphViz diagrams, rendered by Kroki
+      |                        at KROKI_URL (default http://localhost:8000)
       |  --debug               Print stack traces on failure
       |
       |Examples:
@@ -118,7 +121,8 @@ object Config {
       baseUrl = routedBaseUrl(baseUrl),
       temperature = temperature,
       skipEditor = req.skipEditor.getOrElse(false),
-      scholar = req.scholar.getOrElse(false)
+      scholar = req.scholar.getOrElse(false),
+      diagrams = req.diagrams.getOrElse(false)
     )
   }
 
@@ -163,6 +167,7 @@ object Config {
       }
       case "--no-editor" :: t        => loop(t, cfg.copy(skipEditor = true), positional)
       case "--scholar" :: t          => loop(t, cfg.copy(scholar = true), positional)
+      case "--diagrams" :: t         => loop(t, cfg.copy(diagrams = true), positional)
       case "--debug" :: t            => loop(t, cfg.copy(debug = true), positional)
       case "--serve" :: t            => loop(t, cfg.copy(serve = true), positional)
       case other :: t                => Left(s"Unknown argument: $other\n$usage")

@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, CoverError, CoverGen, CoverImage, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -449,9 +449,12 @@ final class BookSession private[web] (
       refs     <- refsRef.get
       findings <- findingsRef.get
       review   <- reviewRef.get
-      md        =
+      assembled =
         if (cfg.scholar) Assembler.scholarMarkdown(outline, written, refs, findings, review, cfg, elapsed)
         else Assembler.markdown(outline, written, foreword, blurb, cfg, elapsed)
+      diagrams <- Diagrams.renderBook(assembled, cfg.diagrams)
+      _        <- logDiagrams(diagrams).when(cfg.diagrams)
+      md        = diagrams.markdown
       files <- ZIO.attempt(
         if (cfg.scholar) Assembler.save(cfg, md, outline, written, refs, findings, review)
         else Assembler.save(cfg, md, outline, written)
@@ -461,6 +464,14 @@ final class BookSession private[web] (
       _     <- log(s"${if (cfg.scholar) "Paper" else "Book"} complete: ${outline.title} (${written.map(_.wordCount).sum} words)")
     } yield ()
   }
+
+  private def logDiagrams(diagrams: bookwriter.RenderedDiagrams): UIO[Unit] =
+    log(s"Rendered ${diagrams.rendered} diagram(s)") *>
+      (diagrams.failures.headOption match {
+        case Some(reason) =>
+          log(s"${diagrams.failures.size} diagram(s) stayed as source text (${clip(reason, 80)})")
+        case None => ZIO.unit
+      })
 
   private def fail(e: Throwable): UIO[Unit] =
     stateRef.get.flatMap { v =>

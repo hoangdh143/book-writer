@@ -74,6 +74,7 @@ export const CreateBookForm = () => {
         wordsPerChapter: parsed.data.wordsPerChapter,
         apiKey: saved.key === '' ? undefined : saved.key,
         scholar: values.scholar || undefined,
+        diagrams: values.diagrams || undefined,
         ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
       },
       { onSuccess: () => patchValues({ prompt: '' }) },

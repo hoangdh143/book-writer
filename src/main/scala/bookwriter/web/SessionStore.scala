@@ -19,7 +19,8 @@ final case class PersistedConfig(
   baseUrl: String,
   temperature: Double,
   skipEditor: Boolean,
-  scholar: Boolean = false
+  scholar: Boolean = false,
+  diagrams: Boolean = false
 ) derives JsonCodec {
 
   def toConfig(id: String): Config = Config(
@@ -34,6 +35,7 @@ final case class PersistedConfig(
     temperature = temperature,
     skipEditor = skipEditor,
     scholar = scholar,
+    diagrams = diagrams,
     serve = true
   )
 }
@@ -102,7 +104,8 @@ object SessionStore:
       baseUrl = cfg.baseUrl,
       temperature = cfg.temperature,
       skipEditor = cfg.skipEditor,
-      scholar = cfg.scholar
+      scholar = cfg.scholar,
+      diagrams = cfg.diagrams
     )
     PersistedSession(
       version = 1,
