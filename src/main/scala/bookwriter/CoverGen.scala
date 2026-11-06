@@ -21,7 +21,7 @@ final case class ImageSettings(
 
 object ImageSettings {
   val defaultBaseUrl: String = "https://api.openai.com/v1/images/generations"
-  val defaultModel: String = "gpt-image-1"
+  val defaultModel: String = "gpt-image-2.6-sunburst"
   val defaultSize: String = "1024x1536"
 
   def fromEnv(
