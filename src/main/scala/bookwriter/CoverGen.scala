@@ -56,7 +56,7 @@ enum CoverError:
 
   def message: String = this match
     case NoOutline(status) => s"book is $status; a cover can only be generated once the outline exists"
-    case MissingApiKey     => "no image API key: pass imageApiKey or set IMAGE_API_KEY / OPENAI_API_KEY"
+    case MissingApiKey     => "no image API key: add one in Settings or set IMAGE_API_KEY / OPENAI_API_KEY"
     case Upstream(m)       => m
 
 /** Carries a CoverError through blocking code so `generate` can surface it typed. */

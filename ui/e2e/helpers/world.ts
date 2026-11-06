@@ -20,6 +20,8 @@ export interface World {
   llmMaxConcurrency: number
   settingsSaved: Record<string, unknown> | undefined
   settingsError: string | undefined
+  coverRequest: Record<string, unknown> | undefined
+  coverError: string | undefined
 }
 
 export const createWorld = (): World => ({
@@ -41,4 +43,6 @@ export const createWorld = (): World => ({
   llmMaxConcurrency: 4,
   settingsSaved: undefined,
   settingsError: undefined,
+  coverRequest: undefined,
+  coverError: undefined,
 })

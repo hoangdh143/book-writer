@@ -23,3 +23,33 @@ Feature: Exporting a completed book
     Then the downloaded file is named "the-lighthouse-mystery.epub"
     And the epub embeds non-empty katex fonts
     And the epub embeds a cover image
+
+  Scenario: A cover uses the server's image settings when none are saved
+    Given a completed book is open
+    Then the generated cover is shown
+    And the cover request carries no image settings
+
+  Scenario: A failed cover can be retried with an image key and model from settings
+    Given the server rejects the next cover with "no image API key"
+    And a completed book is open
+    Then the cover error says "no image API key"
+    When the user opens settings
+    And the user saves the cover image API key "sk-image-test"
+    And the user selects the cover image model "GPT Image 2.6 Flare (faster)"
+    And the user clicks "Done"
+    And the user clicks "Try again"
+    Then the generated cover is shown
+    And the cover request has image key "sk-image-test" and model "gpt-image-2.6-flare"
+
+  Scenario: Image settings survive a reload and clearing keeps the model
+    Given a completed book is open
+    When the user opens settings
+    And the user saves the cover image API key "sk-image-test"
+    And the user selects the cover image model "GPT Image 2.6 Flare (faster)"
+    And the user reloads the page
+    And the user opens settings
+    Then the cover image API key shows "sk-image-test"
+    And the cover image model shows "gpt-image-2.6-flare"
+    When the user clicks "Clear saved keys"
+    Then the cover image API key shows ""
+    And the cover image model shows "gpt-image-2.6-flare"

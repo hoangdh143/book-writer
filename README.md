@@ -113,8 +113,9 @@ docker compose up --build -d    # then open http://localhost:8090
 - **Cover images:** every EPUB export gets an AI-generated cover based on the book's outline. It is
   generated once per book through an OpenAI-compatible images/generations endpoint
   (`IMAGE_BASE_URL`, default OpenAI's) with model `IMAGE_MODEL` (default `gpt-image-2.6-sunburst`) and key from
-  `IMAGE_API_KEY` (falls back to `OPENAI_API_KEY`). Without a key the book still exports, just without
-  a cover.
+  `IMAGE_API_KEY` (falls back to `OPENAI_API_KEY`). Settings in the web UI can set the key and model
+  instead; they stay in the browser and win over the server's values. Without a key the book still
+  exports, just without a cover.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.

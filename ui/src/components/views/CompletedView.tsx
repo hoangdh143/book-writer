@@ -1,22 +1,34 @@
 import { useEffect, useState } from 'react'
 import type { Book } from '../../api/types'
 import { fetchCover, generateCover } from '../../api/endpoints'
-import type { CoverImage } from '../../api/endpoints'
+import type { CoverImage, CoverInput } from '../../api/endpoints'
 import { exportFormats, syncArtifact } from '../../domain/export'
+import { imageModels } from '../../domain/models'
 import type { ExportArtifact, ExportFormat } from '../../domain/export'
 import { buildEpub } from '../../domain/epubExport'
 import { safeBaseName } from '../../domain/text'
 import { button, hint, input } from '../../domain/uiClasses'
 import { useObjectUrl } from '../../hooks/useObjectUrl'
+import { useSettingsStore } from '../../store/settingsStore'
 import { Manuscript } from '../Manuscript'
 
 /** One in-flight/finished cover request per book, so exports and renders share it. */
 const coverCache = new Map<string, Promise<CoverImage>>()
 
+/** Read when a cover is requested, so editing Settings never starts a paid generation by itself. */
+const savedCoverInput = (): CoverInput => {
+  const { imageApiKey, imageModel } = useSettingsStore.getState()
+  const key = imageApiKey.trim()
+  return {
+    imageApiKey: key === '' ? undefined : key,
+    imageModel: imageModels.some((model) => model.id === imageModel) ? imageModel : undefined,
+  }
+}
+
 const coverFor = (bookId: string): Promise<CoverImage> => {
   const cached = coverCache.get(bookId)
   if (cached !== undefined) return cached
-  const request = fetchCover(bookId).then((found) => found ?? generateCover(bookId))
+  const request = fetchCover(bookId).then((found) => found ?? generateCover(bookId, savedCoverInput()))
   coverCache.set(bookId, request)
   request.catch(() => coverCache.delete(bookId))
   return request
@@ -94,6 +106,7 @@ export const CompletedView = ({ book }: { book: Book }) => {
   const [cover, setCover] = useState<CoverImage>()
   const [coverError, setCoverError] = useState<string>()
   const [coverPromise, setCoverPromise] = useState<Promise<CoverImage>>()
+  const [coverAttempt, setCoverAttempt] = useState(0)
   useEffect(() => {
     if (!hasMarkdown) return undefined
     const promise = coverFor(book.id)
@@ -103,7 +116,7 @@ export const CompletedView = ({ book }: { book: Book }) => {
       setCoverError(error instanceof Error ? error.message : 'Could not generate a cover.')
     })
     return undefined
-  }, [book.id, hasMarkdown])
+  }, [book.id, hasMarkdown, coverAttempt])
   const coverUrl = useObjectUrl(cover?.bytes, cover?.mime ?? 'image/png')
 
   return (
@@ -115,7 +128,16 @@ export const CompletedView = ({ book }: { book: Book }) => {
             <p className={`${hint} break-all`}>Saved to {book.markdownFiles.join(', ')}</p>
           )}
           {coverError === undefined ? null : (
-            <p className="text-sm text-red-300">Cover: {coverError}</p>
+            <p className="text-sm text-red-300">
+              Cover: {coverError}{' '}
+              <button
+                type="button"
+                className="text-sky-300 underline hover:text-sky-200"
+                onClick={() => setCoverAttempt((attempt) => attempt + 1)}
+              >
+                Try again
+              </button>
+            </p>
           )}
           {coverUrl !== undefined || coverError !== undefined ? null : (
             <p className={hint}>Generating the cover image…</p>

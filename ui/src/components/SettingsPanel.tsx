@@ -3,6 +3,7 @@ import { button, fieldLabel, hint, input, sectionHeading } from '../domain/uiCla
 import { providerLabels } from '../domain/models'
 import { keyProviders, useSettingsStore } from '../store/settingsStore'
 import { ConcurrencySetting } from './ConcurrencySetting'
+import { CoverImageSettings } from './CoverImageSettings'
 
 interface Props {
   readonly onClose: () => void
@@ -10,10 +11,11 @@ interface Props {
 
 export const SettingsPanel = ({ onClose }: Props) => {
   const apiKeys = useSettingsStore((state) => state.apiKeys)
+  const imageApiKey = useSettingsStore((state) => state.imageApiKey)
   const setApiKey = useSettingsStore((state) => state.setApiKey)
   const clearApiKeys = useSettingsStore((state) => state.clearApiKeys)
   const dialog = useRef<HTMLDialogElement>(null)
-  const noKeys = keyProviders.every((provider) => apiKeys[provider] === '')
+  const noKeys = imageApiKey === '' && keyProviders.every((provider) => apiKeys[provider] === '')
 
   useEffect(() => {
     if (dialog.current?.open === false) dialog.current.showModal()
@@ -32,7 +34,7 @@ export const SettingsPanel = ({ onClose }: Props) => {
       <div className="p-6">
         <h2 className={sectionHeading}>Settings</h2>
         <p className={`${hint} mt-1 mb-4`}>
-          API keys stay in this browser and are sent with each new book. Without one, the server’s
+          API keys stay in this browser and are sent with each new book or cover. Without one, the server’s
           environment key is used. LM Studio needs no key.
         </p>
         <div className="flex flex-col gap-3">
@@ -48,6 +50,7 @@ export const SettingsPanel = ({ onClose }: Props) => {
               />
             </label>
           ))}
+          <CoverImageSettings />
         </div>
         <div className="mt-3 flex justify-end">
           <button className={button.quiet} disabled={noKeys} onClick={clearApiKeys}>

@@ -19,9 +19,16 @@ const tinyPng = Buffer.from(
   'base64',
 )
 
-export const mockCoverApi = async (page: Page): Promise<void> => {
+export const mockCoverApi = async (page: Page, world: World): Promise<void> => {
   await page.route('**/api/books/b1/cover', async (route) => {
     if (route.request().method() === 'POST') {
+      world.coverRequest = await route.request().postDataJSON()
+      if (world.coverError !== undefined) {
+        const error = world.coverError
+        world.coverError = undefined
+        await json(route, { error }, 400)
+        return
+      }
       await route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng })
       return
     }
@@ -88,7 +95,7 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
 
   await mockOpenRouterModels(page)
   await mockLmStudioModels(page)
-  await mockCoverApi(page)
+  await mockCoverApi(page, world)
 }
 
 export const mockOpenRouterModels = async (page: Page): Promise<void> => {

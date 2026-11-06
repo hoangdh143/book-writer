@@ -67,6 +67,11 @@ export const modelPresets: readonly ModelPreset[] = [
   },
 ]
 
+export const imageModels: readonly { readonly id: string; readonly label: string }[] = [
+  { id: 'gpt-image-2.6-sunburst', label: 'GPT Image 2.6 Sunburst (detailed compositions)' },
+  { id: 'gpt-image-2.6-flare', label: 'GPT Image 2.6 Flare (faster)' },
+]
+
 export const customOption: ModelOption = {
   id: customModelId,
   label: 'Custom model…',

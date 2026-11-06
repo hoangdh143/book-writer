@@ -132,6 +132,42 @@ When('the user saves the OpenRouter API key {string}', async ({ page }, key) => 
   await page.getByLabel('OpenRouter API key').fill(key)
 })
 
+When('the user saves the cover image API key {string}', async ({ page }, key) => {
+  await page.getByLabel('Cover image API key').fill(key)
+})
+
+When('the user selects the cover image model {string}', async ({ page }, label) => {
+  await page.getByLabel('Cover image model').selectOption({ label })
+})
+
+Given('the server rejects the next cover with {string}', async ({ world }, message) => {
+  world.coverError = message
+})
+
+Then('the cover request has image key {string} and model {string}', async ({ world }, imageApiKey, imageModel) => {
+  await expect.poll(() => world.coverRequest).toEqual({ imageApiKey, imageModel })
+})
+
+Then('the cover request carries no image settings', async ({ world }) => {
+  await expect.poll(() => world.coverRequest).toEqual({})
+})
+
+Then('the generated cover is shown', async ({ page }) => {
+  await expect(page.getByRole('img', { name: 'Generated book cover' })).toBeVisible()
+})
+
+Then('the cover error says {string}', async ({ page }, message) => {
+  await expect(page.getByText(message)).toBeVisible()
+})
+
+Then('the cover image API key shows {string}', async ({ page }, key) => {
+  await expect(page.getByLabel('Cover image API key')).toHaveValue(key)
+})
+
+Then('the cover image model shows {string}', async ({ page }, model) => {
+  await expect(page.getByLabel('Cover image model')).toHaveValue(model)
+})
+
 Given('the server rejects saving settings with {string}', async ({ world }, message) => {
   world.settingsError = message
 })
