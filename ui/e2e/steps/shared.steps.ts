@@ -16,6 +16,8 @@ import {
   planningBook,
   preparingBook,
   titleOf,
+  illustratedBook,
+  illustratedSettingsBook,
   settingsBook,
   tocReviewBook,
 } from '../helpers/books'
@@ -24,6 +26,10 @@ import type { Book } from '../../src/api/types'
 import type { World } from '../helpers/world'
 
 export const { Given, When, Then } = createBdd(test)
+
+/** A select's label text includes its options, so fields match on how the label starts. */
+const fieldNamed = (page: Page, label: string) =>
+  page.getByLabel(new RegExp(`^${label.split(' (')[0]}`))
 
 const openFromList = async (page: Page, name: string): Promise<void> => {
   await page.goto('/')
@@ -71,6 +77,25 @@ Given('a completed book using {string} at {string} is open', async ({ page, worl
   world.detailQueue = [book]
   await mockBookApi(page, world)
   await openFromList(page, titleOf(book))
+})
+
+Given('a completed book with a large illustration is open', async ({ page, world }) => {
+  world.listItem = listItemFor(illustratedBook)
+  world.detailQueue = [illustratedBook]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(illustratedBook))
+})
+
+Given('a completed illustrated book is open', async ({ page, world }) => {
+  const book = illustratedSettingsBook()
+  world.listItem = listItemFor(book)
+  world.detailQueue = [book]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(book))
+})
+
+Given('OpenRouter image models cannot be loaded', async ({ world }) => {
+  world.imageModelsFail = true
 })
 
 Given('a completed book with diagrams is open', async ({ page, world }) => {
@@ -244,6 +269,26 @@ When('the user writes the idea {string}', async ({ page }, idea) => {
 When('the user sets chapters to {int} and words per chapter to {int}', async ({ page }, chapters, words) => {
   await page.getByLabel('Chapters', { exact: true }).fill(String(chapters))
   await page.getByLabel('Words per chapter').fill(String(words))
+})
+
+When('the user turns on illustrations', async ({ page }) => {
+  await page.getByRole('checkbox', { name: /^Illustrations/ }).check()
+})
+
+When('the user selects the image model {string}', async ({ page }, label) => {
+  await fieldNamed(page, 'Image model').selectOption({ label })
+})
+
+When('the user sets {string} to {string}', async ({ page }, label, value) => {
+  const field = fieldNamed(page, label)
+  if ((await field.evaluate((node) => node.tagName)) === 'SELECT') await field.selectOption(value)
+  else await field.fill(value)
+})
+
+When('the user saves the OpenRouter key {string}', async ({ page }, key) => {
+  await page.getByRole('button', { name: 'Settings' }).click()
+  await page.getByLabel(/OpenRouter/).fill(key)
+  await page.getByRole('dialog', { name: 'Settings' }).press('Escape')
 })
 
 When('the user selects the model {string}', async ({ page }, label) => {
@@ -466,6 +511,49 @@ Then('the create request has idea {string}, {int} chapters of {int} words, {int}
     scholar: true,
     diagrams: true,
   })
+})
+
+Then('the create request has no illustrations', async ({ world }) => {
+  expect(world.createBook).toBeDefined()
+  expect(world.createBook?.['illustrations']).toBeUndefined()
+})
+
+Then('the create request has illustrations {string}', async ({ world }, expected) => {
+  expect(world.createBook?.['illustrations']).toEqual(JSON.parse(expected))
+})
+
+Then('the image model options are {string}', async ({ page }, labels) => {
+  await expect(fieldNamed(page, 'Image model').locator('option')).toHaveText(labels.split(', '))
+})
+
+Then('{string} offers {string}', async ({ page }, label, options) => {
+  await expect(fieldNamed(page, label).locator('option')).toHaveText(options.split(', '))
+})
+
+Then('{string} reads {string}', async ({ page }, label, value) => {
+  await expect(fieldNamed(page, label)).toHaveValue(value)
+})
+
+Then('the form has no {string} field', async ({ page }, label) => {
+  await expect(fieldNamed(page, label)).toHaveCount(0)
+})
+
+Then('the manuscript shows the illustration', async ({ page }) => {
+  const images = page.locator('.manuscript img')
+  await expect(images).toHaveCount(1)
+  await expect(images).toHaveAttribute('alt', 'The lighthouse at dusk')
+  await expect(images).toHaveAttribute('src', /^data:image\/jpeg;base64,/)
+})
+
+Then('the saved copy leaves the large image out', async ({ page }) => {
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('book-writer-completed-books') ?? '').includes('Illustration not in the saved copy'))).toBe(true)
+  const size = await page.evaluate(() => (localStorage.getItem('book-writer-completed-books') ?? '').length)
+  expect(size).toBeLessThan(100_000)
+})
+
+Then('the epub packages the illustration as a JPEG', async ({ world }) => {
+  const zip = await readFile(await world.download!.path())
+  expect(zip.toString('latin1')).toContain('OEBPS/diagram-1.jpeg')
 })
 
 Then('the {string} button is disabled', async ({ page }, name) => {

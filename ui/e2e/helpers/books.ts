@@ -143,6 +143,38 @@ export const diagramBook: Book = makeBook({
   elapsedSeconds: 3720,
 })
 
+/** A real 1x1 JPEG, repeated bytes appended so it can stand in for a large illustration. */
+const jpegPayload = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAA//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AN//Z'
+
+export const illustratedBook: Book = makeBook({
+  status: 'completed',
+  writtenCount: 1,
+  totalChapters: 1,
+  outline: { title: 'The Illustrated Keeper', genre: 'Mystery', premise: 'P', chapters: [{ number: 1, title: 'One', synopsis: 'S' }] },
+  markdown: `# The Illustrated Keeper\n\n![The lighthouse at dusk](data:image/jpeg;base64,${jpegPayload}${'A'.repeat(8_000_000)})\n\n*Figure: The lighthouse at dusk*\n\nThe fog rolled in.`,
+  markdownFiles: ['output/books/b1/book.md'],
+})
+
+export const illustratedSettingsBook = (): Book => ({
+  ...settingsBook('deepseek-chat', 'https://api.deepseek.com/chat/completions'),
+  settings: {
+    chapters: 9,
+    wordsPerChapter: 2200,
+    concurrency: 3,
+    baseUrl: 'https://api.deepseek.com/chat/completions',
+    diagrams: true,
+    illustrations: {
+      model: 'openai/gpt-image-2.6-flare',
+      aspectRatio: '2:3',
+      resolution: null,
+      quality: 'high',
+      perChapter: 2,
+      style: 'Soft watercolour',
+      useReference: false,
+    },
+  },
+})
+
 export const settingsBook = (model: string, baseUrl: string): Book => ({
   ...completedBook,
   prompt: 'A heist on a floating city',

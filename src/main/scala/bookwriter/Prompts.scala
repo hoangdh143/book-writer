@@ -8,7 +8,8 @@ object Prompts {
 
   /** The chapter writer doubles as the academic section writer in scholar mode. */
   def writerPrompt(cfg: Config): String =
-    (if (cfg.scholar) scholarWriter(cfg) else chapterWriter(cfg)) + (if (cfg.diagrams) diagramRules else "")
+    (if (cfg.scholar) scholarWriter(cfg) else chapterWriter(cfg)) + (if (cfg.diagrams) diagramRules else "") +
+      cfg.illustrations.fold("")(c => illustrationRules(c.perChapter))
 
   private val diagramRules: String =
     """
@@ -18,6 +19,15 @@ object Prompts {
   never any other tag and never a markdown image. Keep it small: at most 15 nodes with short labels, and
   double quotes around any label containing punctuation. On the next line write its caption in the form
   `*Figure: what it shows*`."""
+
+  private def illustrationRules(perChapter: Int): String =
+    s"""
+- Illustrations: add one only where a picture truly helps the reader, and at most $perChapter in the whole
+  chapter, counting any already in the text so far. Never use one for data, charts, maps, instructions that
+  must be exact, or identifiable real people. Write it as a fenced code block tagged `illustration`, never a
+  markdown image. Inside it, describe the picture for an artist who has not read the book: subject, setting,
+  composition and each character's appearance, with no text in the image. On the next line write its caption
+  in the form `*Figure: what it shows*`."""
 
   def storyBibleWriter(cfg: Config): String = {
     val sections =

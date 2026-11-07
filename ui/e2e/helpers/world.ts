@@ -22,12 +22,14 @@ export interface World {
   settingsError: string | undefined
   coverRequest: Record<string, unknown> | undefined
   coverError: string | undefined
+  imageModelsFail: boolean
 }
 
 export const createWorld = (): World => ({
   createBook: undefined,
   createError: undefined,
   created: false,
+  imageModelsFail: false,
   listItem: undefined,
   tocApprove: undefined,
   tocRevise: undefined,

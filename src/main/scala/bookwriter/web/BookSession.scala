@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, IllustrationConfig, Illustrations, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -620,12 +620,15 @@ final class BookSession private[web] (
       refs     <- refsRef.get
       findings <- findingsRef.get
       review   <- reviewRef.get
+      limited   = cfg.illustrations.fold(written)(c => written.map(w => w.copy(text = Illustrations.capped(w.text, c.perChapter))))
       assembled =
-        if (cfg.scholar) Assembler.scholarMarkdown(outline, written, refs, findings, review, cfg, elapsed)
-        else Assembler.markdown(outline, written, foreword, blurb, cfg, elapsed)
+        if (cfg.scholar) Assembler.scholarMarkdown(outline, limited, refs, findings, review, cfg, elapsed)
+        else Assembler.markdown(outline, limited, foreword, blurb, cfg, elapsed)
       diagrams <- Diagrams.renderBook(assembled, cfg.diagrams)
       _        <- logDiagrams(diagrams).when(cfg.diagrams)
-      md        = diagrams.markdown
+      pictures <- Illustrations.renderBook(diagrams.markdown, outline, cfg.illustrations, log)
+      _        <- logIllustrations(pictures).when(cfg.illustrations.nonEmpty)
+      md        = pictures.markdown
       files <- ZIO.attempt(
         if (cfg.scholar) Assembler.save(cfg, md, outline, written, refs, findings, review)
         else Assembler.save(cfg, md, outline, written)
@@ -635,6 +638,14 @@ final class BookSession private[web] (
       _     <- log(s"${if (cfg.scholar) "Paper" else "Book"} complete: ${outline.title} (${written.map(_.wordCount).sum} words)")
     } yield ()
   }
+
+  private def logIllustrations(pictures: bookwriter.RenderedIllustrations): UIO[Unit] =
+    log(f"Added ${pictures.rendered} illustration(s), costing $$${pictures.costUsd}%.2f as reported by OpenRouter") *>
+      (pictures.failures.headOption match {
+        case Some(reason) =>
+          log(s"${pictures.failures.size} illustration(s) were left out (${clip(reason, 200)})")
+        case None => ZIO.unit
+      })
 
   private def logDiagrams(diagrams: bookwriter.RenderedDiagrams): UIO[Unit] =
     log(s"Rendered ${diagrams.rendered} diagram(s)") *>

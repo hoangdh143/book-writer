@@ -129,6 +129,12 @@ docker compose up --build -d    # then open http://localhost:8090
   (`http://kroki:8000`). Tick **Diagrams** when creating a book to let the writer add them. They are
   rendered when the book is assembled, so chapter review shows their source. A diagram that cannot be
   rendered stays as source text and the book still completes.
+- **Illustrations:** tick **Illustrations** when creating a book to let the writer ask for AI-generated
+  images. Choose the model from OpenRouter's live list, then its aspect ratio, resolution and quality (the
+  form offers what that model supports), a limit per chapter, a style, and whether to use the first image as
+  a style reference. Images need an OpenRouter key from Settings or `OPENROUTER_API_KEY`. They are generated
+  when the book is assembled, so chapter review shows each description; one that fails is left out, the book
+  still completes, and the activity log shows the failures and the cost OpenRouter reported.
 - **Exposure:** the port is published on localhost only, because the app has no login. Anyone who
   can reach it can read your books and spend the server's API key, so put an authenticating
   reverse proxy in front of it before exposing it to a network.

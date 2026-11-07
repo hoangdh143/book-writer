@@ -94,8 +94,52 @@ export const mockBookApi = async (page: Page, world: World): Promise<void> => {
   })
 
   await mockOpenRouterModels(page)
+  await mockOpenRouterImageModels(page, world)
   await mockLmStudioModels(page)
   await mockCoverApi(page, world)
+}
+
+export const mockOpenRouterImageModels = async (page: Page, world: World): Promise<void> => {
+  await page.route('**/openrouter.ai/api/v1/images/models', async (route) => {
+    if (world.imageModelsFail) {
+      await json(route, { error: 'unavailable' }, 500)
+      return
+    }
+    await json(route, {
+      data: [
+        {
+          id: 'google/gemini-nano-banana-2.1',
+          name: 'Google: Nano Banana 2.1',
+          supported_parameters: {
+            resolution: { type: 'enum', values: ['1K', '2K', '4K'] },
+            aspect_ratio: { type: 'enum', values: ['1:1', '3:2', '16:9'] },
+            n: { type: 'range', min: 1, max: 1 },
+            input_references: { type: 'range', min: 0, max: 14 },
+          },
+        },
+        {
+          id: 'openai/gpt-image-2.6-flare',
+          name: 'OpenAI: GPT Image 2.6 Flare',
+          supported_parameters: {
+            aspect_ratio: { type: 'enum', values: ['1:1', '2:3', 'auto'] },
+            quality: { type: 'enum', values: ['auto', 'low', 'high'] },
+            output_format: { type: 'enum', values: ['png', 'jpeg'] },
+            input_references: { type: 'range', min: 0, max: 16 },
+          },
+        },
+        {
+          id: 'meta/muse-image',
+          name: 'Meta: Muse Image',
+          supported_parameters: { seed: { type: 'boolean' } },
+        },
+        {
+          id: 'recraft/recraft-v4-vector',
+          name: 'Recraft: V4 Vector',
+          supported_parameters: { output_format: { type: 'enum', values: ['svg'] } },
+        },
+      ],
+    })
+  })
 }
 
 export const mockOpenRouterModels = async (page: Page): Promise<void> => {

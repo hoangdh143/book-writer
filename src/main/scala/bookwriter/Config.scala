@@ -16,6 +16,7 @@ final case class Config(
   skipEditor: Boolean = false,
   scholar: Boolean = false,
   diagrams: Boolean = false,
+  illustrations: Option[IllustrationConfig] = None,
   debug: Boolean = false,
   serve: Boolean = false
 )
@@ -93,6 +94,31 @@ object Config {
       |  sbt "run --scholar \"The impact of transformer architectures on low-resource machine translation\""
       |""".stripMargin
 
+  val maxIllustrationsPerChapter: Int = 5
+  val maxIllustrationStyleLength: Int = 500
+
+  private def illustrationConfig(req: bookwriter.web.IllustrationsRequest): Either[String, IllustrationConfig] = {
+    val perChapter = req.perChapter.getOrElse(1)
+    val style = req.style.map(_.trim).getOrElse("")
+    val apiKey = req.apiKey.map(_.trim).filter(_.nonEmpty).orElse(sys.env.get("OPENROUTER_API_KEY").map(_.trim).filter(_.nonEmpty))
+    def choice(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)
+    for {
+      _   <- if (req.model.trim.isEmpty) Left("illustrations need an image model") else Right(())
+      _   <- if (perChapter < 1 || perChapter > maxIllustrationsPerChapter) Left(s"illustrations per chapter must be in 1..$maxIllustrationsPerChapter (got $perChapter)") else Right(())
+      _   <- if (style.length > maxIllustrationStyleLength) Left(s"the illustration style must be at most $maxIllustrationStyleLength characters") else Right(())
+      key <- apiKey.toRight("no OpenRouter API key for illustrations: add one in Settings or set OPENROUTER_API_KEY")
+    } yield IllustrationConfig(
+      apiKey = key,
+      model = req.model.trim,
+      aspectRatio = choice(req.aspectRatio),
+      resolution = choice(req.resolution),
+      quality = choice(req.quality),
+      perChapter = perChapter,
+      style = style,
+      useReference = req.useReference.getOrElse(false)
+    )
+  }
+
   def fromRequest(req: bookwriter.web.CreateBookRequest): Either[String, Config] = {
     val envKey = sys.env.getOrElse("DEEPSEEK_API_KEY", sys.env.getOrElse("OPENAI_API_KEY", ""))
     val apiKey = req.apiKey.getOrElse(envKey)
@@ -110,6 +136,7 @@ object Config {
       _ <- if (temperature < 0.0 || temperature > 2.0) Left("temperature must be in 0.0..2.0") else Right(())
       _ <- if (req.prompt.trim.isEmpty) Left("prompt must not be empty") else Right(())
       _ <- if (apiKey.isEmpty && !isLocalBaseUrl(baseUrl)) Left("no API key: pass apiKey or set DEEPSEEK_API_KEY") else Right(())
+      illustrations <- req.illustrations.fold[Either[String, Option[IllustrationConfig]]](Right(None))(illustrationConfig(_).map(Some(_)))
     } yield Config(
       prompt = req.prompt.trim,
       chapters = chapters,
@@ -122,7 +149,8 @@ object Config {
       temperature = temperature,
       skipEditor = req.skipEditor.getOrElse(false),
       scholar = req.scholar.getOrElse(false),
-      diagrams = req.diagrams.getOrElse(false)
+      diagrams = req.diagrams.getOrElse(false),
+      illustrations = illustrations
     )
   }
 

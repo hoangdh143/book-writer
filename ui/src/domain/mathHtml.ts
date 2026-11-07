@@ -96,11 +96,11 @@ export const markdownToXmlHtml = async (markdown: string): Promise<string> => {
 
 const unsafeReadingTags = ['picture', 'source', 'video', 'audio', 'style', 'form', 'input', 'button', 'textarea', 'select']
 
-const embeddedPng = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
+const embeddedImage = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/
 
-/** Diagrams arrive as embedded PNGs; any other image could load a remote resource. */
+/** Diagrams and illustrations arrive embedded; any other image could load a remote resource. */
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.nodeName === 'IMG' && !embeddedPng.test(node.getAttribute('src') ?? '')) node.remove()
+  if (node.nodeName === 'IMG' && !embeddedImage.test(node.getAttribute('src') ?? '')) node.remove()
 })
 
 /** Markdown → HTML for on-screen reading. Book text is model output, so it is sanitised and cannot load remote resources. */

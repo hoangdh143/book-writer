@@ -3,6 +3,10 @@ import type { FormEvent } from 'react'
 import { z } from 'zod'
 import { useCreateBook } from '../../api/bookMutations'
 import { useLiveModels } from '../../api/liveModels'
+import { useOpenRouterImageModels } from '../../api/openrouter'
+import type { IllustrationsInput } from '../../api/requests'
+import { imageChoicesFor, maxImagesPerChapter } from '../../domain/illustrations'
+import type { ImageModel } from '../../domain/illustrations'
 import { providerForModelId, resolveModelChoice } from '../../domain/models'
 import type { KeyProvider } from '../../store/settingsStore'
 import type { ModelPreset } from '../../domain/models'
@@ -22,6 +26,8 @@ const formSchema = z
     modelId: z.string().min(1),
     customModel: z.string(),
     customBaseUrl: z.string(),
+    illustrations: z.boolean(),
+    imagesPerChapter: z.string(),
   })
   .superRefine((values, ctx) => {
     if (values.modelId === 'custom' && values.customModel.trim() === '') {
@@ -30,6 +36,14 @@ const formSchema = z
     const baseUrl = values.customBaseUrl.trim()
     if (baseUrl !== '' && !z.string().url().safeParse(baseUrl).success) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customBaseUrl'], message: 'Must be a valid URL' })
+    }
+    const perChapter = Number(values.imagesPerChapter)
+    if (values.illustrations && (!Number.isInteger(perChapter) || perChapter < 1 || perChapter > maxImagesPerChapter)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['imagesPerChapter'],
+        message: `Choose 1 to ${maxImagesPerChapter} illustrations per chapter`,
+      })
     }
   })
 
@@ -49,6 +63,22 @@ const savedKeyFor = (
   return { key: apiKeys[provider].trim(), provider }
 }
 
+const illustrationsInput = (
+  values: FormValues,
+  models: readonly ImageModel[],
+  apiKey: string,
+): IllustrationsInput | undefined => {
+  if (!values.illustrations) return undefined
+  const style = values.imageStyle.trim()
+  return {
+    ...imageChoicesFor(models.find((model) => model.id === values.imageModelId), values),
+    model: values.imageModelId,
+    perChapter: Number(values.imagesPerChapter),
+    style: style === '' ? undefined : style,
+    apiKey: apiKey === '' ? undefined : apiKey,
+  }
+}
+
 export const CreateBookForm = () => {
   const [values, setValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -58,6 +88,7 @@ export const CreateBookForm = () => {
   const create = useCreateBook()
   const live = useLiveModels()
   const savedKeys = useSettingsStore((state) => state.apiKeys)
+  const imageModels = useOpenRouterImageModels()
 
   useLayoutEffect(() => {
     if (bookCopy === null) return
@@ -89,6 +120,7 @@ export const CreateBookForm = () => {
         apiKey: saved.key === '' ? undefined : saved.key,
         scholar: values.scholar || undefined,
         diagrams: values.diagrams || undefined,
+        illustrations: illustrationsInput(values, imageModels.data ?? [], savedKeys.openrouter.trim()),
         ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
       },
       {

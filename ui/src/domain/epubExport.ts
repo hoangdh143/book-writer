@@ -72,6 +72,8 @@ ${sections.map(s => `    <li><a href="book.xhtml#${s.anchor}">${xmlEscape(s.titl
 const coverExtension = (mime: string): string =>
   mime.includes('jpeg') ? 'jpg' : mime.includes('gif') ? 'gif' : mime.includes('webp') ? 'webp' : 'png'
 
+const imageMediaType = (name: string): string => `image/${name.slice(name.lastIndexOf('.') + 1)}`
+
 const contentOpf = (
   title: string,
   uuid: string,
@@ -95,7 +97,7 @@ const contentOpf = (
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="css" href="styles.css" media-type="text/css"/>
     <item id="book" href="book.xhtml" media-type="application/xhtml+xml"/>${cover === undefined ? '' : `\n    <item id="cover-image" href="${cover.file}" media-type="${cover.mime}" properties="cover-image"/>\n    <item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`}
-${diagramNames.map((name, i) => `    <item id="diagram-${i}" href="${name}" media-type="image/png"/>\n`).join('')}${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type="font/woff2"/>`).join('\n')}
+${diagramNames.map((name, i) => `    <item id="diagram-${i}" href="${name}" media-type="${imageMediaType(name)}"/>\n`).join('')}${fontNames.map((name, i) => `    <item id="font-${i}" href="${name}" media-type="font/woff2"/>`).join('\n')}
   </manifest>
   <spine>
 ${[...(cover === undefined ? [] : ['    <itemref idref="cover-page"/>']), '    <itemref idref="nav"/>', '    <itemref idref="book"/>'].join('\n')}
@@ -132,17 +134,17 @@ export interface CoverImage {
   readonly bytes: Uint8Array
 }
 
-/** Moves embedded diagram PNGs out of the text and into their own EPUB files. */
+/** Moves embedded images out of the text and into their own EPUB files. */
 const extractDiagrams = (markdown: string): { readonly text: string; readonly files: readonly ZipEntry[] } => {
-  // Splitting on a capture group leaves the base64 payloads at the odd positions.
-  const pieces = markdown.split(/\]\(data:image\/png;base64,([A-Za-z0-9+/=]+)\)/)
-  const diagramName = (position: number): string => `diagram-${(position + 1) / 2}.png`
+  // Splitting on two capture groups leaves repeating runs of text, image type and base64 payload.
+  const pieces = markdown.split(/\]\(data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)\)/)
+  const diagramName = (position: number): string => `diagram-${(position + 2) / 3}.${pieces[position]}`
   return {
-    text: pieces.map((piece, i) => (i % 2 === 0 ? piece : `](${diagramName(i)})`)).join(''),
+    text: pieces.flatMap((piece, i) => (i % 3 === 0 ? [piece] : i % 3 === 1 ? [`](${diagramName(i)})`] : [])).join(''),
     files: pieces.flatMap((piece, i) =>
-      i % 2 === 0
+      i % 3 !== 2
         ? []
-        : [{ name: `OEBPS/${diagramName(i)}`, bytes: Uint8Array.from(atob(piece), (char) => char.charCodeAt(0)) }],
+        : [{ name: `OEBPS/${diagramName(i - 1)}`, bytes: Uint8Array.from(atob(piece), (char) => char.charCodeAt(0)) }],
     ),
   }
 }

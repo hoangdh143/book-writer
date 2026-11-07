@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{BookOutline, ChapterPlan, Config, ContinuityMemory, Reference, WrittenChapter}
+import bookwriter.{BookOutline, ChapterPlan, Config, ContinuityMemory, IllustrationConfig, Reference, WrittenChapter}
 import zio.UIO
 import zio.json.JsonCodec
 import zio.json._
@@ -20,7 +20,8 @@ final case class PersistedConfig(
   temperature: Double,
   skipEditor: Boolean,
   scholar: Boolean = false,
-  diagrams: Boolean = false
+  diagrams: Boolean = false,
+  illustrations: Option[IllustrationConfig] = None
 ) derives JsonCodec {
 
   def toConfig(id: String): Config = Config(
@@ -36,6 +37,7 @@ final case class PersistedConfig(
     skipEditor = skipEditor,
     scholar = scholar,
     diagrams = diagrams,
+    illustrations = illustrations,
     serve = true
   )
 }
@@ -108,7 +110,8 @@ object SessionStore:
       temperature = cfg.temperature,
       skipEditor = cfg.skipEditor,
       scholar = cfg.scholar,
-      diagrams = cfg.diagrams
+      diagrams = cfg.diagrams,
+      illustrations = cfg.illustrations
     )
     PersistedSession(
       version = 1,

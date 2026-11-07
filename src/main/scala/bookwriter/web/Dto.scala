@@ -4,6 +4,17 @@ import zio.json.JsonCodec
 
 // ---- requests ---------------------------------------------------------------
 
+final case class IllustrationsRequest(
+  model: String,
+  aspectRatio: Option[String] = None,
+  resolution: Option[String] = None,
+  quality: Option[String] = None,
+  perChapter: Option[Int] = None,
+  style: Option[String] = None,
+  useReference: Option[Boolean] = None,
+  apiKey: Option[String] = None
+) derives JsonCodec
+
 final case class CreateBookRequest(
   prompt: String,
   chapters: Option[Int] = None,
@@ -15,7 +26,8 @@ final case class CreateBookRequest(
   temperature: Option[Double] = None,
   skipEditor: Option[Boolean] = None,
   scholar: Option[Boolean] = None,
-  diagrams: Option[Boolean] = None
+  diagrams: Option[Boolean] = None,
+  illustrations: Option[IllustrationsRequest] = None
 ) derives JsonCodec
 
 final case class ChapterEdit(
@@ -78,13 +90,24 @@ final case class ChapterStatusDto(
 
 final case class EventDto(at: String, message: String) derives JsonCodec
 
-/** What a duplicate of this book starts from. The API key stays on the server. */
+final case class IllustrationSettingsDto(
+  model: String,
+  aspectRatio: Option[String],
+  resolution: Option[String],
+  quality: Option[String],
+  perChapter: Int,
+  style: String,
+  useReference: Boolean
+) derives JsonCodec
+
+/** What a duplicate of this book starts from. The API keys stay on the server. */
 final case class BookSettingsDto(
   chapters: Int,
   wordsPerChapter: Int,
   concurrency: Int,
   baseUrl: String,
-  diagrams: Boolean
+  diagrams: Boolean,
+  illustrations: Option[IllustrationSettingsDto] = None
 ) derives JsonCodec
 
 final case class BookDto(

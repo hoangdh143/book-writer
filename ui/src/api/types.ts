@@ -26,12 +26,23 @@ const eventSchema = z.object({
   message: z.string(),
 })
 
+const illustrationSettingsSchema = z.object({
+  model: z.string(),
+  aspectRatio: z.string().nullish(),
+  resolution: z.string().nullish(),
+  quality: z.string().nullish(),
+  perChapter: z.number().int(),
+  style: z.string(),
+  useReference: z.boolean(),
+})
+
 const bookSettingsSchema = z.object({
   chapters: z.number().int(),
   wordsPerChapter: z.number().int(),
   concurrency: z.number().int(),
   baseUrl: z.string(),
   diagrams: z.boolean(),
+  illustrations: illustrationSettingsSchema.nullish(),
 })
 
 const bookSchema = z.object({

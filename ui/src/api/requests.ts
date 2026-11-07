@@ -25,6 +25,17 @@ export interface TocReviseInput {
   readonly prompt?: string
 }
 
+export interface IllustrationsInput {
+  readonly model: string
+  readonly aspectRatio?: string
+  readonly resolution?: string
+  readonly quality?: string
+  readonly perChapter: number
+  readonly style?: string
+  readonly useReference: boolean
+  readonly apiKey?: string
+}
+
 export interface CreateBookInput {
   readonly prompt: string
   readonly chapters?: number
@@ -35,4 +46,5 @@ export interface CreateBookInput {
   readonly apiKey?: string
   readonly scholar?: boolean
   readonly diagrams?: boolean
+  readonly illustrations?: IllustrationsInput
 }

@@ -20,6 +20,18 @@ export const duplicateValues = (book: Book, livePresets: readonly ModelPreset[])
           wordsPerChapter: String(settings.wordsPerChapter),
           chaptersAtOnce: String(settings.concurrency),
           diagrams: settings.diagrams,
+          ...(settings.illustrations == null
+            ? {}
+            : {
+                illustrations: true,
+                imageModelId: settings.illustrations.model,
+                imageAspectRatio: settings.illustrations.aspectRatio ?? '',
+                imageResolution: settings.illustrations.resolution ?? '',
+                imageQuality: settings.illustrations.quality ?? '',
+                imagesPerChapter: String(settings.illustrations.perChapter),
+                imageStyle: settings.illustrations.style,
+                imageReference: settings.illustrations.useReference,
+              }),
         }),
   }
 }

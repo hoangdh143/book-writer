@@ -1,6 +1,8 @@
 import { fieldLabel, growingText, hint, input } from '../../domain/uiClasses'
 import { FieldError } from '../FieldError'
+import { defaultImageModelId } from '../../domain/illustrations'
 import { ChaptersAtOnceField } from './ChaptersAtOnceField'
+import { IllustrationFields } from './IllustrationFields'
 import { ModelFields } from './ModelFields'
 import { OptionCheckbox } from './OptionCheckbox'
 
@@ -14,6 +16,14 @@ export interface FormValues {
   readonly customBaseUrl: string
   readonly scholar: boolean
   readonly diagrams: boolean
+  readonly illustrations: boolean
+  readonly imageModelId: string
+  readonly imageAspectRatio: string
+  readonly imageResolution: string
+  readonly imageQuality: string
+  readonly imagesPerChapter: string
+  readonly imageStyle: string
+  readonly imageReference: boolean
 }
 
 export const initialValues: FormValues = {
@@ -26,6 +36,14 @@ export const initialValues: FormValues = {
   customBaseUrl: '',
   scholar: false,
   diagrams: false,
+  illustrations: false,
+  imageModelId: defaultImageModelId,
+  imageAspectRatio: '3:2',
+  imageResolution: '2K',
+  imageQuality: '',
+  imagesPerChapter: '1',
+  imageStyle: '',
+  imageReference: true,
 }
 
 interface Props {
@@ -98,6 +116,7 @@ export const CreateBookFields = ({ values, errors, onPatch }: Props) => (
       checked={values.diagrams}
       onChange={(diagrams) => onPatch({ diagrams })}
     />
+    <IllustrationFields values={values} errors={errors} onPatch={onPatch} />
     <ModelFields values={values} errors={errors} onPatch={onPatch} />
   </>
 )

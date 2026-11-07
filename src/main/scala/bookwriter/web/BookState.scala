@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{BookOutline, ChapterPlan, Config, WrittenChapter}
+import bookwriter.{BookOutline, ChapterPlan, Config, IllustrationConfig, WrittenChapter}
 
 enum RunMode:
   case StepByStep, RunAll
@@ -94,6 +94,9 @@ object BookMapper {
     }
   }
 
+  private def illustrationSettings(c: IllustrationConfig): IllustrationSettingsDto =
+    IllustrationSettingsDto(c.model, c.aspectRatio, c.resolution, c.quality, c.perChapter, c.style, c.useReference)
+
   def bookDto(id: String, cfg: Config, phase: BookPhase, events: List[EventDto], storyBible: String = ""): BookDto = {
     val outline = outlineOf(phase)
     val written = writtenOf(phase)
@@ -107,7 +110,7 @@ object BookMapper {
       writtenCount = written.size,
       totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters),
       storyBible = Some(storyBible).filter(_.nonEmpty),
-      settings = Some(BookSettingsDto(cfg.chapters, cfg.wordsPerChapter, cfg.concurrency, cfg.baseUrl, cfg.diagrams)),
+      settings = Some(BookSettingsDto(cfg.chapters, cfg.wordsPerChapter, cfg.concurrency, cfg.baseUrl, cfg.diagrams, cfg.illustrations.map(illustrationSettings))),
       outline = outline.map(outlineDto),
       chapters = chapters,
       currentChapter = currentOf(phase),
