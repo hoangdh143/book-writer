@@ -122,8 +122,10 @@ docker compose up --build -d    # then open http://localhost:8090
   generated once per book through an OpenAI-compatible images/generations endpoint
   (`IMAGE_BASE_URL`, default OpenAI's) with model `IMAGE_MODEL` (default `gpt-image-2.6-sunburst`) and key from
   `IMAGE_API_KEY` (falls back to `OPENAI_API_KEY`). Settings in the web UI can set the key and model
-  instead; they stay in the browser and win over the server's values. Without a key the book still
-  exports, just without a cover.
+  instead; they stay in the browser and win over the server's values. **Cover image model** in Settings also
+  lists OpenRouter's image models; those use the OpenRouter key from Settings (or `OPENROUTER_API_KEY`) and
+  a portrait aspect ratio when the model offers one. Without a key the book still exports, just without a
+  cover.
 - **Diagrams:** Compose also runs a self-hosted [Kroki](https://kroki.io/) with its Mermaid companion, which
   turn diagram text into images. They have no port on the host; the app reaches them at `KROKI_URL`
   (`http://kroki:8000`). Tick **Diagrams** when creating a book to let the writer add them. They are

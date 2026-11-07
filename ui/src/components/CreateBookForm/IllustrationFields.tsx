@@ -1,5 +1,5 @@
 import { useOpenRouterImageModels } from '../../api/openrouter'
-import { imageChoicesFor, maxImagesPerChapter } from '../../domain/illustrations'
+import { imageChoicesFor } from '../../domain/illustrations'
 import { fieldLabel, growingText, hint, input } from '../../domain/uiClasses'
 import { useSettingsStore } from '../../store/settingsStore'
 import { FieldError } from '../FieldError'
@@ -110,7 +110,6 @@ export const IllustrationFields = ({ values, errors, onPatch }: Props) => {
               <input
                 type="number"
                 min={1}
-                max={maxImagesPerChapter}
                 className={`${input} font-normal`}
                 value={values.imagesPerChapter}
                 onChange={(event) => onPatch({ imagesPerChapter: event.target.value })}

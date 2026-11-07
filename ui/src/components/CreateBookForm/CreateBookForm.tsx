@@ -5,7 +5,7 @@ import { useCreateBook } from '../../api/bookMutations'
 import { useLiveModels } from '../../api/liveModels'
 import { useOpenRouterImageModels } from '../../api/openrouter'
 import type { IllustrationsInput } from '../../api/requests'
-import { imageChoicesFor, maxImagesPerChapter } from '../../domain/illustrations'
+import { imageChoicesFor } from '../../domain/illustrations'
 import type { ImageModel } from '../../domain/illustrations'
 import { providerForModelId, resolveModelChoice } from '../../domain/models'
 import type { KeyProvider } from '../../store/settingsStore'
@@ -38,11 +38,11 @@ const formSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customBaseUrl'], message: 'Must be a valid URL' })
     }
     const perChapter = Number(values.imagesPerChapter)
-    if (values.illustrations && (!Number.isInteger(perChapter) || perChapter < 1 || perChapter > maxImagesPerChapter)) {
+    if (values.illustrations && (!Number.isInteger(perChapter) || perChapter < 1)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['imagesPerChapter'],
-        message: `Choose 1 to ${maxImagesPerChapter} illustrations per chapter`,
+        message: 'Choose a whole number of illustrations per chapter, at least 1',
       })
     }
   })

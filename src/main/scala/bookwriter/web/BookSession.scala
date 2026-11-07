@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, IllustrationConfig, Illustrations, ImageSettings, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, IllustrationConfig, Illustrations, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -132,7 +132,7 @@ final class BookSession private[web] (
 
   /** Returns the cached cover, or generates one from the current outline and caches it.
     * The mutex keeps concurrent requests from generating two covers. */
-  def ensureCover(settings: ImageSettings): IO[CoverError, CoverImage] =
+  def ensureCover(generate: String => IO[CoverError, CoverImage]): IO[CoverError, CoverImage] =
     coverRef.get.flatMap {
       case Some(cached) => ZIO.succeed(cached)
       case None         =>
@@ -145,7 +145,7 @@ final class BookSession private[web] (
                   case None          => ZIO.fail(CoverError.NoOutline(v.phase.status))
                   case Some(outline) =>
                     log("Generating the cover image") *>
-                      CoverGen.generate(CoverGen.coverPrompt(outline), settings).tap { _ =>
+                      generate(CoverGen.coverPrompt(outline)).tap { _ =>
                         log("Cover image generated")
                       }.tapError { error =>
                         log(s"Cover generation failed (${clip(error.message, 80)})")

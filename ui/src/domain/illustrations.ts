@@ -1,6 +1,13 @@
 export const defaultImageModelId = 'google/gemini-nano-banana-2.1'
 
-export const maxImagesPerChapter = 5
+/** Marks a saved cover model as an OpenRouter one, since OpenAI's own ids could look alike. */
+export const openRouterCoverPrefix = 'openrouter:'
+
+const portraitRatios = ['2:3', '3:4', '4:5', '9:16']
+
+/** Covers are portrait, so take the first portrait ratio the model offers, or leave it to the model. */
+export const coverAspectRatioFor = (model: ImageModel | undefined): string =>
+  portraitRatios.find((ratio) => model?.aspectRatios.includes(ratio)) ?? ''
 
 export interface ImageModel {
   readonly id: string

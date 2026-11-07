@@ -12,7 +12,7 @@ import javax.imageio.stream.MemoryCacheImageOutputStream
 import scala.util.Try
 import scala.util.matching.Regex
 import zio.json._
-import zio.{Ref, UIO, ZIO}
+import zio.{IO, Ref, UIO, ZIO}
 
 /** How a book's illustrations are generated through OpenRouter. Unset choices use the model's default. */
 final case class IllustrationConfig(
@@ -74,6 +74,15 @@ object Illustrations {
       text.substring(0, found.start) + text.substring(found.end)
     }
 
+  /** A cover from an OpenRouter image model, with the same handling and one retry as an illustration. */
+  def cover(prompt: String, model: String, aspectRatio: Option[String], apiKey: String): IO[CoverError, CoverImage] =
+    generate(prompt, None, IllustrationConfig(apiKey, model, aspectRatio), imagesUrl).flatMap {
+      case Right(image) => ZIO.succeed(CoverImage(image.mime, image.bytes))
+      case Left(reason) => ZIO.fail(CoverError.Upstream(s"cover generation through OpenRouter failed: $reason"))
+    }
+
+  private def imagesUrl: String = sys.env.getOrElse("OPENROUTER_IMAGES_URL", defaultUrl)
+
   def renderBook(
     markdown: String,
     outline: BookOutline,
@@ -82,7 +91,7 @@ object Illustrations {
   ): UIO[RenderedIllustrations] =
     config match {
       case None      => ZIO.succeed(RenderedIllustrations(markdown, 0, Nil, 0.0))
-      case Some(cfg) => render(markdown, outline, cfg, sys.env.getOrElse("OPENROUTER_IMAGES_URL", defaultUrl), progress)
+      case Some(cfg) => render(markdown, outline, cfg, imagesUrl, progress)
     }
 
   private def render(

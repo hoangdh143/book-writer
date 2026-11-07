@@ -94,7 +94,6 @@ object Config {
       |  sbt "run --scholar \"The impact of transformer architectures on low-resource machine translation\""
       |""".stripMargin
 
-  val maxIllustrationsPerChapter: Int = 5
   val maxIllustrationStyleLength: Int = 500
 
   private def illustrationConfig(req: bookwriter.web.IllustrationsRequest): Either[String, IllustrationConfig] = {
@@ -104,7 +103,7 @@ object Config {
     def choice(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)
     for {
       _   <- if (req.model.trim.isEmpty) Left("illustrations need an image model") else Right(())
-      _   <- if (perChapter < 1 || perChapter > maxIllustrationsPerChapter) Left(s"illustrations per chapter must be in 1..$maxIllustrationsPerChapter (got $perChapter)") else Right(())
+      _   <- if (perChapter < 1) Left(s"illustrations per chapter must be at least 1 (got $perChapter)") else Right(())
       _   <- if (style.length > maxIllustrationStyleLength) Left(s"the illustration style must be at most $maxIllustrationStyleLength characters") else Right(())
       key <- apiKey.toRight("no OpenRouter API key for illustrations: add one in Settings or set OPENROUTER_API_KEY")
     } yield IllustrationConfig(

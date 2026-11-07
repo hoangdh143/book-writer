@@ -325,6 +325,10 @@ Then('the cover request has image key {string} and model {string}', async ({ wor
   await expect.poll(() => world.coverRequest).toEqual({ imageApiKey, imageModel })
 })
 
+Then('the cover request is {string}', async ({ world }, expected) => {
+  await expect.poll(() => world.coverRequest).toEqual(JSON.parse(expected))
+})
+
 Then('the cover request carries no image settings', async ({ world }) => {
   await expect.poll(() => world.coverRequest).toEqual({})
 })

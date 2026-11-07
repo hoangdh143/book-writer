@@ -52,11 +52,13 @@ enum CoverError:
   /** The book has no outline yet, so there is nothing to base a cover on. */
   case NoOutline(status: String)
   case MissingApiKey
+  case MissingOpenRouterKey
   case Upstream(details: String)
 
   def message: String = this match
     case NoOutline(status) => s"book is $status; a cover can only be generated once the outline exists"
     case MissingApiKey     => "no image API key: add one in Settings or set IMAGE_API_KEY / OPENAI_API_KEY"
+    case MissingOpenRouterKey => "no OpenRouter API key for the cover: add one in Settings or set OPENROUTER_API_KEY"
     case Upstream(m)       => m
 
 /** Carries a CoverError through blocking code so `generate` can surface it typed. */

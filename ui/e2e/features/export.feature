@@ -41,6 +41,30 @@ Feature: Exporting a completed book
     Then the generated cover is shown
     And the cover request has image key "sk-image-test" and model "gpt-image-2.6-flare"
 
+  Scenario: A cover can come from an OpenRouter image model, with its key and a portrait ratio
+    Given the server rejects the next cover with "no image API key"
+    And a completed book is open
+    Then the cover error says "no image API key"
+    When the user saves the OpenRouter key "sk-or-test"
+    And the user opens settings
+    And the user selects the cover image model "OpenAI: GPT Image 2.6 Flare"
+    Then the form has no "Cover image API key" field
+    When the user clicks "Done"
+    And the user clicks "Try again"
+    Then the generated cover is shown
+    And the cover request is '{"provider":"openrouter","imageModel":"openai/gpt-image-2.6-flare","imageApiKey":"sk-or-test","aspectRatio":"2:3"}'
+
+  Scenario: An OpenRouter cover model is remembered, and one without a portrait ratio sends none
+    Given the book API is mocked
+    When the user opens settings
+    And the user selects the cover image model "Google: Nano Banana 2.1"
+    And the user reloads the page
+    And the user opens settings
+    Then the cover image model shows "openrouter:google/gemini-nano-banana-2.1"
+    When the user clicks "Done"
+    And a completed book is open
+    Then the cover request is '{"provider":"openrouter","imageModel":"google/gemini-nano-banana-2.1"}'
+
   Scenario: Image settings survive a reload and clearing keeps the model
     Given a completed book is open
     When the user opens settings

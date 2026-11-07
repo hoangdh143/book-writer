@@ -50,19 +50,27 @@ Feature: Illustrations
     And the user clicks "Create book"
     Then the create request has illustrations '{"useReference":false,"model":"meta/muse-image","perChapter":1}'
 
-  Scenario Outline: An out-of-range number per chapter is refused
+  Scenario: Many illustrations per chapter can be chosen
+    Given the book API is mocked
+    When the user writes the idea "A guide to bread"
+    And the user turns on illustrations
+    And the user sets "Illustrations per chapter (at most)" to "25"
+    And the user clicks "Create book"
+    Then the create request has illustrations '{"aspectRatio":"3:2","resolution":"2K","useReference":true,"model":"google/gemini-nano-banana-2.1","perChapter":25}'
+
+  Scenario Outline: An invalid number per chapter is refused
     Given the book API is mocked
     When the user writes the idea "A guide to bread"
     And the user turns on illustrations
     And the user sets "Illustrations per chapter (at most)" to "<value>"
     And the user clicks "Create book"
-    Then the form shows the error "Choose 1 to 5 illustrations per chapter"
+    Then the form shows the error "Choose a whole number of illustrations per chapter, at least 1"
     And no book was created
 
     Examples:
       | value |
       | 0     |
-      | 6     |
+      | -2    |
       | 1.5   |
 
   Scenario: The book can still be created when the model list is unavailable

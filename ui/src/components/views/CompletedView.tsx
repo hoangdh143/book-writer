@@ -3,6 +3,7 @@ import type { Book } from '../../api/types'
 import { fetchCover, generateCover } from '../../api/endpoints'
 import type { CoverImage, CoverInput } from '../../api/endpoints'
 import { exportFormats, syncArtifact } from '../../domain/export'
+import { openRouterCoverPrefix } from '../../domain/illustrations'
 import { imageModels } from '../../domain/models'
 import type { ExportArtifact, ExportFormat } from '../../domain/export'
 import { buildEpub } from '../../domain/epubExport'
@@ -17,7 +18,16 @@ const coverCache = new Map<string, Promise<CoverImage>>()
 
 /** Read when a cover is requested, so editing Settings never starts a paid generation by itself. */
 const savedCoverInput = (): CoverInput => {
-  const { imageApiKey, imageModel } = useSettingsStore.getState()
+  const { apiKeys, imageApiKey, imageModel, imageAspectRatio } = useSettingsStore.getState()
+  if (imageModel.startsWith(openRouterCoverPrefix)) {
+    const openRouterKey = apiKeys.openrouter.trim()
+    return {
+      provider: 'openrouter',
+      imageModel: imageModel.slice(openRouterCoverPrefix.length),
+      imageApiKey: openRouterKey === '' ? undefined : openRouterKey,
+      aspectRatio: imageAspectRatio === '' ? undefined : imageAspectRatio,
+    }
+  }
   const key = imageApiKey.trim()
   return {
     imageApiKey: key === '' ? undefined : key,

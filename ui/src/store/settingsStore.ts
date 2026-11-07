@@ -8,11 +8,13 @@ export const keyProviders: readonly KeyProvider[] = ['deepseek', 'openai', 'open
 interface SettingsStore {
   readonly apiKeys: Record<KeyProvider, string>
   readonly imageApiKey: string
-  /** Empty means the server's default image model. */
+  /** Empty means the server's default image model; OpenRouter models carry the openrouter: prefix. */
   readonly imageModel: string
+  /** The cover aspect ratio for an OpenRouter model, chosen when the model is; empty means its default. */
+  readonly imageAspectRatio: string
   readonly setApiKey: (provider: KeyProvider, key: string) => void
   readonly setImageApiKey: (key: string) => void
-  readonly setImageModel: (model: string) => void
+  readonly setImageModel: (model: string, aspectRatio?: string) => void
   readonly clearApiKeys: () => void
 }
 
@@ -24,10 +26,11 @@ export const useSettingsStore = create<SettingsStore>()(
       apiKeys: emptyKeys,
       imageApiKey: '',
       imageModel: '',
+      imageAspectRatio: '',
       setApiKey: (provider, key) =>
         set((state) => ({ apiKeys: { ...state.apiKeys, [provider]: key } })),
       setImageApiKey: (key) => set({ imageApiKey: key }),
-      setImageModel: (model) => set({ imageModel: model }),
+      setImageModel: (model, aspectRatio = '') => set({ imageModel: model, imageAspectRatio: aspectRatio }),
       clearApiKeys: () => set({ apiKeys: emptyKeys, imageApiKey: '' }),
     }),
     {
@@ -37,6 +40,7 @@ export const useSettingsStore = create<SettingsStore>()(
         apiKeys: state.apiKeys,
         imageApiKey: state.imageApiKey,
         imageModel: state.imageModel,
+        imageAspectRatio: state.imageAspectRatio,
       }),
     },
   ),

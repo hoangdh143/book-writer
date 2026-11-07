@@ -22,6 +22,8 @@ export interface CoverInput {
   readonly imageBaseUrl?: string
   readonly imageApiKey?: string
   readonly imageModel?: string
+  readonly provider?: 'openrouter'
+  readonly aspectRatio?: string
 }
 
 const coverFromResponse = async (response: Response): Promise<CoverImage> => ({

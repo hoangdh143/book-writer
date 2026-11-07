@@ -1,9 +1,9 @@
 package bookwriter.web
 
-import bookwriter.{Config, CoverError, CoverImage, ImageSettings, LlmLimiter, LlmSettings}
+import bookwriter.{Config, CoverError, CoverGen, CoverImage, Illustrations, ImageSettings, LlmLimiter, LlmSettings}
 import zio.http.{Body, Headers, Method, Request, Response, Routes, Status, handler, string}
 import zio.json._
-import zio.ZIO
+import zio.{IO, ZIO}
 
 object BookRoutes {
 
@@ -99,15 +99,33 @@ object BookRoutes {
 
   private def generateCover(session: BookSession, body: CoverRequest): ZIO[Any, Response, Response] =
     session
-      .ensureCover(ImageSettings.fromEnv(body.imageBaseUrl, body.imageApiKey, body.imageModel, body.size))
+      .ensureCover(coverGenerator(body))
       .foldZIO(
         {
           case CoverError.NoOutline(status) => ZIO.fail(json(Status.Conflict, ApiErrorDto(status).toJson))
           case CoverError.MissingApiKey     => ZIO.fail(json(Status.BadRequest, ApiErrorDto(CoverError.MissingApiKey.message).toJson))
+          case CoverError.MissingOpenRouterKey => ZIO.fail(json(Status.BadRequest, ApiErrorDto(CoverError.MissingOpenRouterKey.message).toJson))
           case error: CoverError.Upstream   => ZIO.fail(json(Status.BadGateway, ApiErrorDto(error.message).toJson))
         },
         cover => ZIO.succeed(coverResponse(cover))
       )
+
+  private def present(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)
+
+  /** OpenRouter covers need a model; the OpenAI-compatible path keeps its env defaults. */
+  private def coverGenerator(body: CoverRequest): String => IO[CoverError, CoverImage] =
+    if (present(body.provider).contains("openrouter")) {
+      val key = present(body.imageApiKey).orElse(present(sys.env.get("OPENROUTER_API_KEY")))
+      prompt =>
+        (key, present(body.imageModel)) match {
+          case (None, _)               => ZIO.fail(CoverError.MissingOpenRouterKey)
+          case (_, None)               => ZIO.fail(CoverError.Upstream("an OpenRouter cover needs an image model"))
+          case (Some(apiKey), Some(m)) => Illustrations.cover(prompt, m, present(body.aspectRatio), apiKey)
+        }
+    } else {
+      val settings = ImageSettings.fromEnv(body.imageBaseUrl, body.imageApiKey, body.imageModel, body.size)
+      prompt => CoverGen.generate(prompt, settings)
+    }
 
   private def coverResponse(cover: CoverImage): Response =
     Response(

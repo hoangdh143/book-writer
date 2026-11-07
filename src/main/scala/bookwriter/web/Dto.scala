@@ -62,7 +62,10 @@ final case class CoverRequest(
   imageBaseUrl: Option[String] = None,
   imageApiKey: Option[String] = None,
   imageModel: Option[String] = None,
-  size: Option[String] = None
+  size: Option[String] = None,
+  /** "openrouter" uses OpenRouter's image API; anything else an OpenAI-compatible endpoint. */
+  provider: Option[String] = None,
+  aspectRatio: Option[String] = None
 ) derives JsonCodec
 
 // ---- responses ---------------------------------------------------------------
