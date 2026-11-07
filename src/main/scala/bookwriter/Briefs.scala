@@ -11,10 +11,32 @@ object Briefs {
     if (refs.isEmpty) "" else
       s"\n\nREFERENCE LIST (cite ONLY these, by bracketed number):\n${refs.map(_.format).mkString("\n")}"
 
+  /** The idea as the author wrote it. Only the planners read it otherwise, so directions about
+    * language or layout (a bilingual parallel text, say) would never reach the writer. */
+  private def requestBlock(cfg: Config): String =
+    if (cfg.prompt.trim.isEmpty) "" else
+      s"""
+
+THE AUTHOR'S REQUEST (the book idea as the author wrote it; follow every direction it gives about language,
+format, layout or style in every paragraph you write):
+\"\"\"
+${cfg.prompt.trim}
+\"\"\""""
+
   private def draftBlock(draft: Option[String]): String =
     draft.fold("") { d =>
       s"\n\nCURRENT DRAFT (revise this; keep whatever the request does not touch):\n\"\"\"\n${d.trim}\n\"\"\""
     }
+
+  /** The last `n` words of `text` with its line breaks intact. The writer copies the layout of the
+    * text it continues, so flattening it here made the continuation one unbroken paragraph. */
+  private def lastWords(text: String, n: Int): String = {
+    val starts = "\\S+".r.findAllMatchIn(text).map(_.start).toVector
+    (if (starts.length <= n) text else text.substring(starts(starts.length - n))).trim
+  }
+
+  /** Repeated in the final instruction, where it is hardest to overlook. */
+  private val formatReminder: String = ", in exactly the language and layout THE AUTHOR'S REQUEST asks for"
 
   /** Everything up to (and excluding) the final "write now" instruction. */
   private def chapterBody(
@@ -48,7 +70,7 @@ object Briefs {
     }.getOrElse("") + draftBlock(draft)
 
     s"""Book: "${outline.title}" (genre: ${outline.genre})
-Premise: ${outline.premise}
+Premise: ${outline.premise}${requestBlock(cfg)}
 
 FULL CHAPTER PLAN:
 $toc
@@ -70,7 +92,7 @@ Chapter synopsis: ${ch.synopsis}$prev$ending$opening$closing${authorNotesBlock(n
         }.mkString("\n\n---\n\n")
 
     s"""Book: "${outline.title}" (genre: ${outline.genre})
-Premise: ${outline.premise}
+Premise: ${outline.premise}${requestBlock(cfg)}
 
 TABLE OF CONTENTS:
 $toc
@@ -93,7 +115,7 @@ $manuscript"""
     chapterBody(outline, idx, prevEnding, cfg, notes, revision, withClosing = true, refs = refs, memory = memory, draft = draft) +
       s"""
 
-Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."""
+Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)$formatReminder."""
 
   /** Part 1 of a multi-segment chapter: same framing, but the chapter continues in later calls. */
   def chapterOpening(
@@ -112,7 +134,7 @@ Write only the chapter text now (markdown, about ${cfg.wordsPerChapter} words)."
       s"""
 
 This chapter will be written in $totalParts consecutive parts, appended in order. You are writing Part 1 of
-about ${Config.wordsPerSegment} words. Write only Part 1 now (markdown): open the chapter and stop at a natural
+about ${Config.wordsPerSegment} words. Write only Part 1 now (markdown$formatReminder): open the chapter and stop at a natural
 hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
 
   /** Parts 2..N of a multi-segment chapter: continue seamlessly from the text so far. */
@@ -131,7 +153,7 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
   ): String = {
     val ch = outline.chapters(idx)
     val rewrite = revision.fold("")(r => s"\n\nREVISION REQUEST — apply this to the whole chapter:\n\"\"\"\n$r\n\"\"\"") + draftBlock(draft)
-    val tail = soFar.split("\\s+").filter(_.nonEmpty).takeRight(700).mkString(" ")
+    val tail = lastWords(soFar, 700)
     val lastPart = part == totalParts
     val closing =
       if (lastPart && idx == outline.chapters.length - 1)
@@ -142,7 +164,7 @@ hand-off point (mid-scene is fine); do NOT conclude the chapter here."""
     val partTarget = math.max(100, math.min(Config.wordsPerSegment, cfg.wordsPerChapter - (part - 1) * Config.wordsPerSegment))
 
     s"""Book: "${outline.title}" (genre: ${outline.genre})
-Premise: ${outline.premise}
+Premise: ${outline.premise}${requestBlock(cfg)}
 
 ${memory}YOUR ASSIGNMENT — continue Chapter ${ch.number}: "${ch.title}" (Part $part of $totalParts).
 Chapter synopsis: ${ch.synopsis}${authorNotesBlock(notes)}$closing$rewrite${referencesBlock(refs)}
@@ -152,7 +174,7 @@ TEXT SO FAR (ends mid-chapter; continue EXACTLY from where it stops):
 ... $tail
 \"\"\"
 
-Write ONLY the continuation now (markdown, about $partTarget more words toward the chapter's
+Write ONLY the continuation now (markdown$formatReminder, about $partTarget more words toward the chapter's
 ${cfg.wordsPerChapter}-word target): pick up seamlessly where the text above stops. Do not repeat, restate or
 re-summarize anything already written."""
   }

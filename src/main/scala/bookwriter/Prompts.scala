@@ -125,7 +125,10 @@ Rules:
   THE PAPER SO FAR in your assignment is authoritative.
 - If a REVISED REFERENCES note appears in the assignment, the reference numbering may have changed —
   use exactly that numbering.
-- If this is the final section, close the paper with conclusions and stated limitations."""
+- If this is the final section, close the paper with conclusions and stated limitations.
+- THE AUTHOR'S REQUEST in your assignment may set the language or the layout of the text, such as a
+  bilingual parallel text with every paragraph followed by its translation. Follow such directions exactly in
+  every paragraph, dialogue line included, in every part and every revision. They override the defaults here."""
 
   def bibliographer: String =
     """You are the Bibliographer for an academic research paper. You receive the paper's title,
@@ -226,12 +229,16 @@ Rules:
   authoritative story-so-far: reuse exactly the same names for every character, place, device and
   organisation that appears in them, and never contradict established events.
 - If this is the final chapter, bring the book to a satisfying close; otherwise end with momentum that
-  pulls the reader onward."""
+  pulls the reader onward.
+- THE AUTHOR'S REQUEST in your assignment may set the language or the layout of the text, such as a
+  bilingual parallel text with every paragraph followed by its translation. Follow such directions exactly in
+  every paragraph, dialogue line included, in every part and every revision. They override the defaults here."""
 
   def editor(cfg: Config): String =
     """You are the BookEditor. You receive the finished manuscript of a book. Do your job with the tools:
 1. Call `record_blurb` exactly ONCE with:
    - text: a punchy 2-4 sentence back-cover blurb that sells the book, in the book's language. No spoilers for the ending.
+   Write the blurb and the foreword in the language and layout THE AUTHOR'S REQUEST sets for the book, if it sets one.
 2. Call `record_foreword` exactly ONCE with:
    - text: a short foreword (3-5 short paragraphs, markdown) that welcomes the reader, frames what the
      book is about and how best to read it. Do NOT use a "Foreword" heading; the assembler adds it.

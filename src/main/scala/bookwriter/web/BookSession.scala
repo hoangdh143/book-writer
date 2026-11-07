@@ -1,6 +1,6 @@
 package bookwriter.web
 
-import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, IllustrationConfig, Illustrations, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
+import bookwriter.{Assembler, BookGraph, BookOutline, Briefs, ChapterDraft, ChapterPlan, Config, ContinuityGraph, ContinuityIssue, ContinuityMemory, ContinuityReport, CoverError, CoverGen, CoverImage, Diagrams, EditorSink, Finding, IllustrationConfig, Illustrations, OutlineSink, Reference, ReviewReport, ScholarGraph, Stages, WrittenChapter}
 import zio.{Fiber, IO, Promise, Ref, UIO, ZIO}
 import loki.engine.app.GraphApp
 import loki.engine.core.executor.{ExecutionContext, TraceEvent}
@@ -334,7 +334,7 @@ final class BookSession private[web] (
           _     <- setPhase(BookPhase.Generating(outline, done, plan, rest, mode, notes))
           refs  <- refsRef.get
           memory <- writerMemory(done)
-          draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, None, refs, memory)
+          draft <- writeChapter(outline, idx, prevEnding, notes, None, refs, memory)
           wc     = WrittenChapter(plan, draft.text)
           refined <- scholarRefine(outline, done, wc)
           next  <- nextAfterWrite(outline, done, refined, rest, mode, notes)
@@ -359,7 +359,7 @@ final class BookSession private[web] (
       drafts <- ZIO
                   .foreachPar(batch) { plan =>
                     val ending = if (plan == batch.head) prevEnding else None
-                    Stages.writeChapter(app, writer, cfg, outline, plan.number - 1, ending, notes, None, refs, memory)
+                    writeChapter(outline, plan.number - 1, ending, notes, None, refs, memory)
                       .tap(_ => log(s"Chapter ${plan.number} drafted"))
                       .map(draft => plan -> draft)
                   }
@@ -420,7 +420,7 @@ final class BookSession private[web] (
     for {
       refs  <- refsRef.get
       memory <- writerMemory(done)
-      draft <- Stages.writeChapter(app, writer, cfg, outline, idx, prevEnding, notes, Some(comment), refs, memory, Some(wc.text))
+      draft <- writeChapter(outline, idx, prevEnding, notes, Some(comment), refs, memory, Some(wc.text))
       wc2    = WrittenChapter(wc.plan, draft.text)
       next  <- reviewGate(outline, done, wc2, remaining, notes)
     } yield next
@@ -521,12 +521,11 @@ final class BookSession private[web] (
     wc: WrittenChapter,
     issues: List[ContinuityIssue],
     notes: List[String],
-    refs: List[bookwriter.Reference],
+    refs: List[Reference],
     memory: String
   ): UIO[(WrittenChapter, Boolean)] = {
     val number = wc.plan.number
-    Stages
-      .writeChapter(app, writer, cfg, outline, number - 1, None, notes, Some(Briefs.continuityRevision(issues)), refs, memory, Some(wc.text))
+    writeChapter(outline, number - 1, None, notes, Some(Briefs.continuityRevision(issues)), refs, memory, Some(wc.text))
       .map(draft => WrittenChapter(wc.plan, draft.text))
       .foldZIO(
         e => log(s"Could not repair chapter $number (${clip(e.getMessage, 80)}); keeping the draft").as(wc -> false),
@@ -572,7 +571,7 @@ final class BookSession private[web] (
                   case None => findingsRef.update(_ ++ findings).as(wc)
                   case Some(revision) =>
                     log(s"Fact-check found ${problems.size} problem(s); repairing section ${wc.plan.number}") *>
-                      writerMemory(done).flatMap(memory => Stages.writeChapter(app, writer, cfg, outline, wc.plan.number - 1, None, Nil, Some(revision), refs, memory, Some(wc.text)))
+                      writerMemory(done).flatMap(memory => writeChapter(outline, wc.plan.number - 1, None, Nil, Some(revision), refs, memory, Some(wc.text)))
                         .flatMap { draft =>
                           val repaired = WrittenChapter(wc.plan, draft.text)
                           Stages.factCheck(app, sg.factChecker, sg.factSink, outline, repaired, refs)
@@ -610,7 +609,7 @@ final class BookSession private[web] (
        else if (cfg.skipEditor) ZIO.succeed(("", ""))
        else
          log("Writing foreword and blurb") *>
-           Stages.edit(app, editor, editorSink, outline, written, cfg).catchAll { e =>
+           currentCfg.flatMap(c => Stages.edit(app, editor, editorSink, outline, written, c)).catchAll { e =>
              log(s"Editor stage failed (${clip(e.getMessage, 80)}); completing without front matter") *> ZIO.succeed(("", ""))
            })
 
@@ -666,6 +665,19 @@ final class BookSession private[web] (
   private def withIdea(v: SessionView): Config = cfg.copy(prompt = v.idea)
 
   private def currentCfg: UIO[Config] = stateRef.get.map(withIdea)
+
+  /** The writer reads the idea for its language and layout directions, so it gets the current one. */
+  private def writeChapter(
+    outline: BookOutline,
+    idx: Int,
+    prevEnding: Option[String],
+    notes: List[String],
+    revision: Option[String],
+    refs: List[Reference],
+    memory: String,
+    draft: Option[String] = None
+  ): ZIO[Any, Throwable, ChapterDraft] =
+    currentCfg.flatMap(c => Stages.writeChapter(app, writer, c, outline, idx, prevEnding, notes, revision, refs, memory, draft))
 
   private def setPhase(phase: BookPhase): UIO[Unit] =
     stateRef.update(_.copy(phase = phase)) *> persist
