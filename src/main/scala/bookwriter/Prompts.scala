@@ -38,17 +38,29 @@ object Prompts {
 - Style: voice, tense and citation habits
 - Hand-offs: for every section, one line each on what it opens from and what it must leave established"""
       else
-        """- Characters: full name, role, age, looks, voice, relationships and what they know when the book starts
+        """For fiction (novels, stories, narrative poetry):
+- Characters: full name, role, age, looks, voice, relationships and what they know when the book starts
 - Places: exact names and the details that must stay the same
-- Terms: invented words, organisations, devices and rules of the world, or key terms for non-fiction
+- Terms: invented words, organisations, devices and rules of the world
 - Timeline: when each chapter happens and how long the story spans
 - Style: point of view, tense and tone
 - Hand-offs: for every chapter, one line each on the state it opens from and the state it must end on, so a
-  chapter can be written before its neighbour exists"""
+  chapter can be written before its neighbour exists
+
+For non-fiction (how-to, textbooks, exam guides, history, biography, memoir, essays, business and the like):
+- Terms: each key term, its exact definition, spelling and abbreviation
+- Figures and recommendations: the numbers, ranges, rules and advice the book commits to, so no chapter gives a
+  different value or contradicting advice
+- Reader: who the book is for and what they already know at the start
+- Running examples: recurring examples, case studies or real people the book follows, only if the plan uses
+  them. Never invent an author persona, characters or settings the plan does not call for
+- Style: voice, how the book addresses the reader, and formatting habits
+- Hand-offs: for every chapter, one line each on what it may assume has already been covered and what it must
+  leave the reader knowing, so a chapter can be written before its neighbour exists"""
     s"""You write the shared guide that keeps a ${if (cfg.scholar) "research paper" else "book"} consistent. Several
 writers will work on different parts at the same moment without seeing each other's text, so anything you leave
 open will be invented differently by each of them. Decide those details now.
-
+${if (cfg.scholar) "" else "\nDecide from the genre and premise whether the book is fiction or non-fiction, and use only the matching set of\nsections.\n"}
 Write in the same language as the book, with these sections:
 $sections
 
@@ -63,7 +75,8 @@ record what they actually established, for writers who will never see their full
 For EVERY chapter you are given, call `record_chapter_facts` once:
 - summary: 2-3 sentences on what happens or is argued, including how it ends
 - facts: up to 10 short, specific statements later chapters must respect, one per line, such as names,
-  relationships, injuries, who knows what, where things are, dates and decisions. Only what this text establishes.
+  relationships, injuries, who knows what, where things are, dates and decisions, or for non-fiction the
+  definitions, figures, recommendations and examples it commits to. Only what this text establishes.
   Skip atmosphere.
 
 When asked to check, also call `record_issue` once for each real contradiction: between a chapter and the guide,
