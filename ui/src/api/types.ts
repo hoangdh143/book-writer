@@ -26,6 +26,14 @@ const eventSchema = z.object({
   message: z.string(),
 })
 
+const bookSettingsSchema = z.object({
+  chapters: z.number().int(),
+  wordsPerChapter: z.number().int(),
+  concurrency: z.number().int(),
+  baseUrl: z.string(),
+  diagrams: z.boolean(),
+})
+
 const bookSchema = z.object({
   id: z.string(),
   prompt: z.string(),
@@ -33,6 +41,7 @@ const bookSchema = z.object({
   status: z.string(),
   scholar: z.boolean().nullish(),
   storyBible: z.string().nullish(),
+  settings: bookSettingsSchema.nullish(),
   writtenCount: z.number().int(),
   totalChapters: z.number().int(),
   outline: outlineSchema.nullish(),

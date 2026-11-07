@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { z } from 'zod'
 import { useCreateBook } from '../../api/bookMutations'
@@ -7,6 +7,7 @@ import { providerForModelId, resolveModelChoice } from '../../domain/models'
 import type { KeyProvider } from '../../store/settingsStore'
 import type { ModelPreset } from '../../domain/models'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useUiStore } from '../../store/uiStore'
 import { button, hint, pageHeading } from '../../domain/uiClasses'
 import { ApiKeyHint } from './ApiKeyHint'
 import { initialValues, CreateBookFields } from './CreateBookFields'
@@ -51,9 +52,20 @@ const savedKeyFor = (
 export const CreateBookForm = () => {
   const [values, setValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [copiedFrom, setCopiedFrom] = useState<string>()
+  const bookCopy = useUiStore((state) => state.bookCopy)
+  const clearBookCopy = useUiStore((state) => state.clearBookCopy)
   const create = useCreateBook()
   const live = useLiveModels()
   const savedKeys = useSettingsStore((state) => state.apiKeys)
+
+  useLayoutEffect(() => {
+    if (bookCopy === null) return
+    setValues(bookCopy.values)
+    setErrors({})
+    setCopiedFrom(bookCopy.from)
+    clearBookCopy()
+  }, [bookCopy, clearBookCopy])
 
   const patchValues = (patch: Partial<FormValues>): void =>
     setValues((current) => ({ ...current, ...patch }))
@@ -79,7 +91,12 @@ export const CreateBookForm = () => {
         diagrams: values.diagrams || undefined,
         ...resolveModelChoice(parsed.data.modelId, parsed.data.customModel, parsed.data.customBaseUrl, live.presets),
       },
-      { onSuccess: () => patchValues({ prompt: '' }) },
+      {
+        onSuccess: () => {
+          patchValues({ prompt: '' })
+          setCopiedFrom(undefined)
+        },
+      },
     )
   }
 
@@ -90,6 +107,11 @@ export const CreateBookForm = () => {
         Describe your idea. You’ll approve an outline before any chapter is written, and can review
         each chapter as it’s finished.
       </p>
+      {copiedFrom === undefined ? null : (
+        <p className="mb-6 -mt-3 text-sm text-sky-300">
+          Copied from “{copiedFrom}”. Change anything you like. Nothing starts until you press Create book.
+        </p>
+      )}
       <div className="flex flex-col gap-5">
         <CreateBookFields values={values} errors={errors} onPatch={patchValues} />
         <ApiKeyHint provider={saved.provider} hasKey={saved.key !== ''} />

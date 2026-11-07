@@ -131,6 +131,23 @@ export type LiveModelStatuses = Record<'openrouter' | 'lmstudio', LiveModelStatu
 
 export const isCustomChoice = (modelId: string): boolean => modelId === customModelId
 
+/** The form's model fields for a model and URL a book already ran with. LM Studio's URL differs on
+  * the server when it runs in Docker, so those presets match on the model id alone. */
+export const modelFieldsFor = (
+  model: string,
+  baseUrl: string | undefined,
+  livePresets: readonly ModelPreset[] = [],
+): { readonly modelId: string; readonly customModel: string; readonly customBaseUrl: string } => {
+  const preset = [...modelPresets, ...livePresets].find((candidate) => candidate.id === model)
+  const isPreset =
+    preset !== undefined &&
+    (baseUrl === undefined || baseUrl === preset.baseUrl || preset.provider === 'lmstudio')
+  const isOpenRouter = model.includes('/') && (baseUrl === undefined || baseUrl === openRouterChatUrl)
+  return isPreset || isOpenRouter
+    ? { modelId: model, customModel: '', customBaseUrl: '' }
+    : { modelId: customModelId, customModel: model, customBaseUrl: baseUrl ?? '' }
+}
+
 export const resolveModelChoice = (
   modelId: string,
   customModel: string,

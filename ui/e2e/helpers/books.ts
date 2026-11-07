@@ -143,6 +143,14 @@ export const diagramBook: Book = makeBook({
   elapsedSeconds: 3720,
 })
 
+export const settingsBook = (model: string, baseUrl: string): Book => ({
+  ...completedBook,
+  prompt: 'A heist on a floating city',
+  model,
+  scholar: true,
+  settings: { chapters: 9, wordsPerChapter: 2200, concurrency: 3, baseUrl, diagrams: true },
+})
+
 export const completedBook: Book = makeBook({
   status: 'completed',
   outline: chapterPlans,

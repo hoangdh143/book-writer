@@ -107,6 +107,7 @@ object BookMapper {
       writtenCount = written.size,
       totalChapters = outline.map(_.chapters.size).getOrElse(cfg.chapters),
       storyBible = Some(storyBible).filter(_.nonEmpty),
+      settings = Some(BookSettingsDto(cfg.chapters, cfg.wordsPerChapter, cfg.concurrency, cfg.baseUrl, cfg.diagrams)),
       outline = outline.map(outlineDto),
       chapters = chapters,
       currentChapter = currentOf(phase),

@@ -78,6 +78,15 @@ final case class ChapterStatusDto(
 
 final case class EventDto(at: String, message: String) derives JsonCodec
 
+/** What a duplicate of this book starts from. The API key stays on the server. */
+final case class BookSettingsDto(
+  chapters: Int,
+  wordsPerChapter: Int,
+  concurrency: Int,
+  baseUrl: String,
+  diagrams: Boolean
+) derives JsonCodec
+
 final case class BookDto(
   id: String,
   prompt: String,
@@ -87,6 +96,7 @@ final case class BookDto(
   totalChapters: Int,
   scholar: Option[Boolean] = None,
   storyBible: Option[String] = None,
+  settings: Option[BookSettingsDto] = None,
   outline: Option[OutlineDto] = None,
   chapters: List[ChapterStatusDto] = Nil,
   currentChapter: Option[Int] = None,

@@ -16,6 +16,7 @@ import {
   planningBook,
   preparingBook,
   titleOf,
+  settingsBook,
   tocReviewBook,
 } from '../helpers/books'
 import { mockBookApi, mockChapterActions, mockTocActions } from '../helpers/mocks'
@@ -62,6 +63,14 @@ Given('a completed book is open', async ({ page, world }) => {
   world.detailQueue = [completedBook]
   await mockBookApi(page, world)
   await openFromList(page, titleOf(completedBook))
+})
+
+Given('a completed book using {string} at {string} is open', async ({ page, world }, model, baseUrl) => {
+  const book = settingsBook(model, baseUrl)
+  world.listItem = listItemFor(book)
+  world.detailQueue = [book]
+  await mockBookApi(page, world)
+  await openFromList(page, titleOf(book))
 })
 
 Given('a completed book with diagrams is open', async ({ page, world }) => {
@@ -430,6 +439,33 @@ Then('the TOC approve request has no idea', async ({ world }) => {
 
 Then('the TOC revise request has idea {string}', async ({ world }, idea) => {
   expect((world.tocRevise as { prompt?: string }).prompt).toBe(idea)
+})
+
+Then('there is no {string} button', async ({ page }, name) => {
+  await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+})
+
+Then('the new book form reads {string}, {string} chapters of {string} words, {string} at once', async ({ page }, idea, chapters, words, atOnce) => {
+  await expect(page.getByRole('heading', { name: 'New book' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Book idea' })).toHaveValue(idea)
+  await expect(page.getByLabel('Chapters', { exact: true })).toHaveValue(chapters)
+  await expect(page.getByLabel('Words per chapter')).toHaveValue(words)
+  await expect(page.getByLabel('Chapters at once')).toHaveValue(atOnce)
+})
+
+Then('no book has been created', async ({ world }) => {
+  expect(world.createBook).toBeUndefined()
+})
+
+Then('the create request has idea {string}, {int} chapters of {int} words, {int} at once, scholar and diagrams', async ({ world }, idea, chapters, words, atOnce) => {
+  expect(world.createBook).toMatchObject({
+    prompt: idea,
+    chapters,
+    wordsPerChapter: words,
+    concurrency: atOnce,
+    scholar: true,
+    diagrams: true,
+  })
 })
 
 Then('the {string} button is disabled', async ({ page }, name) => {
